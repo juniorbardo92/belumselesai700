@@ -1,0 +1,98 @@
+name: APK Public Telemetry Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/apk-public-telemetry-acceptance.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require synthetic contract marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^mode=synthetic-contract-only$' activation/apk-public-telemetry-acceptance.request
+          grep -q '^cleanup=yes$' activation/apk-public-telemetry-acceptance.request
+      - name: Verify constrained public telemetry contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          INSTANCE=$(printf 'apk-contract-%s' "$GITHUB_RUN_ID" | sha256sum | cut -d' ' -f1)
+          export INSTANCE
+
+          wrong=$(curl --silent --output /tmp/wrong.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data "{\"appInstanceId\":\"$INSTANCE\",\"appVersion\":\"contract\"}" \
+            "$BASE/api/monetization/app/install")
+          cat /tmp/wrong.json
+          test "$wrong" = '403'
+
+          extra=$(curl --silent --output /tmp/extra.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -H 'X-Panglima-Client: panglima-umkm-android' \
+            --data "{\"appInstanceId\":\"$INSTANCE\",\"appVersion\":\"contract\",\"email\":\"blocked@example.invalid\"}" \
+            "$BASE/api/monetization/app/install")
+          cat /tmp/extra.json
+          test "$extra" = '400'
+
+          first=$(curl --silent --output /tmp/first.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -H 'X-Panglima-Client: panglima-umkm-android' \
+            --data "{\"appInstanceId\":\"$INSTANCE\",\"appVersion\":\"contract-$GITHUB_RUN_ID\"}" \
+            "$BASE/api/monetization/app/install")
+          cat /tmp/first.json
+          test "$first" = '201'
+          grep -q '"ok":true' /tmp/first.json
+          grep -q '"duplicate":false' /tmp/first.json
+
+          second=$(curl --silent --output /tmp/second.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -H 'X-Panglima-Client: panglima-umkm-android' \
+            --data "{\"appInstanceId\":\"$INSTANCE\",\"appVersion\":\"contract-$GITHUB_RUN_ID\"}" \
+            "$BASE/api/monetization/app/install")
+          cat /tmp/second.json
+          test "$second" = '200'
+          grep -q '"duplicate":true' /tmp/second.json
+      - name: Verify D1 write and clean synthetic evidence
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          INSTANCE=$(printf 'apk-contract-%s' "$GITHUB_RUN_ID" | sha256sum | cut -d' ' -f1)
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT id,event_type,source,platform,visitor_id,metadata_json FROM monetization_events WHERE brand_id='brand-umkm-naik-kelas' AND event_type='app_install' AND visitor_id='$INSTANCE' ORDER BY id DESC LIMIT 2;" > /tmp/d1.json
+          cat /tmp/d1.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('/tmp/d1.json','utf8'));
+          const rows=x?.[0]?.results??[];
+          if(rows.length!==1) throw new Error(`expected exactly one idempotent row, got ${rows.length}`);
+          const r=rows[0];
+          if(r.event_type!=='app_install'||r.source!=='apk'||r.platform!=='app') throw new Error('app install source/platform mismatch');
+          const m=JSON.parse(r.metadata_json||'{}');
+          if(m.appVersion!==`contract-${process.env.GITHUB_RUN_ID}`) throw new Error('app version metadata mismatch');
+          if(m.devicePlatform!=='android') throw new Error('device platform mismatch');
+          if(m?.properties?.publicConstrained!==true||m?.properties?.financialFieldsAccepted!==false||m?.properties?.piiExpected!==false) throw new Error('privacy/security metadata mismatch');
+          NODE
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="DELETE FROM monetization_record_quality WHERE record_type='event' AND record_id IN (SELECT id FROM monetization_events WHERE visitor_id='$INSTANCE' AND event_type='app_install'); DELETE FROM monetization_touchpoints WHERE event_id IN (SELECT id FROM monetization_events WHERE visitor_id='$INSTANCE' AND event_type='app_install'); DELETE FROM monetization_events WHERE visitor_id='$INSTANCE' AND event_type='app_install';" > /tmp/cleanup.json
+          cat /tmp/cleanup.json

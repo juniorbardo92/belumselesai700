@@ -1,0 +1,25 @@
+{
+  "name": "@umkm-naik-kelas/openclaw-content-registry",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "typebox": "^1.1.38"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.5.17"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.5.17"
+    }
+  }
+}

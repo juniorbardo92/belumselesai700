@@ -1,0 +1,66 @@
+name: Monetization OpenClaw Research Readiness
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-openclaw-research-readiness.request'
+      - '.github/workflows/monetization-openclaw-research-readiness.yml'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require readiness marker and internal credential
+        shell: bash
+        run: |
+          test -f activation/monetization-openclaw-research-readiness.request
+          grep -q '^approved=yes$' activation/monetization-openclaw-research-readiness.request
+          grep -q '^mode=read-only-no-external-caller-fabrication$' activation/monetization-openclaw-research-readiness.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Verify revenue-informed research bridge readiness
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/readiness.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/openclaw/research-readiness")
+          cat /tmp/readiness.json
+          test "$code" = '200'
+          node - <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/readiness.json','utf8'));
+          if (body.ok !== true) process.exit(1);
+          if (body.bridge !== 'openclaw-to-content-os-service-binding') process.exit(1);
+          if (body.mode !== 'read-only' || body.publishing !== false) process.exit(1);
+          if (!Array.isArray(body.allowedPlatforms) || !body.allowedPlatforms.includes('threads') || !body.allowedPlatforms.includes('instagram') || body.allowedPlatforms.includes('x')) process.exit(1);
+          if (body?.revenueLearning?.available !== true) process.exit(1);
+          if (body?.topicResearch?.httpStatus !== 200 || body?.topicResearch?.ok !== true) process.exit(1);
+          if (body?.topicResearch?.mode !== 'read-only') process.exit(1);
+          console.log(`ACTIVE_LEARNING_INSIGHTS=${body.revenueLearning.activeInsights}`);
+          console.log(`GUIDANCE_KEYWORD_COUNT=${body.revenueLearning.enrichmentKeywordCount}`);
+          console.log(`TOPIC_RESEARCH_CONFIGURED=${body.topicResearch.configured === true}`);
+          console.log(`TOPIC_RESEARCH_CAN_COLLECT=${body.topicResearch.canCollect === true}`);
+          NODE
+      - name: Verify OpenClaw research routes are fail-closed without bearer
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          manifest_code=$(curl --silent --show-error --output /tmp/manifest.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/research-manifest")
+          trigger_code=$(curl --silent --show-error --output /tmp/trigger.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"topic":"Riset UMKM acceptance","platform":"threads"}' \
+            "$BASE/api/monetization/openclaw/research")
+          cat /tmp/manifest.json
+          cat /tmp/trigger.json
+          test "$manifest_code" = '401'
+          test "$trigger_code" = '401'

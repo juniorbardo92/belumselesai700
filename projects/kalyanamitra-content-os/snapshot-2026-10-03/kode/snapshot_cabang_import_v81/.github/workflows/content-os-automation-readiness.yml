@@ -1,0 +1,57 @@
+name: Content OS Automation Readiness
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/content-os-automation-readiness.request'
+      - '.github/workflows/content-os-automation-readiness.yml'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require marker and internal credential
+        shell: bash
+        run: |
+          test -f activation/content-os-automation-readiness.request
+          grep -q '^approved=yes$' activation/content-os-automation-readiness.request
+          grep -q '^mode=read-only$' activation/content-os-automation-readiness.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Read Content OS automation status through Worker Service Binding
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/evidence.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/openclaw/evidence")
+          cat /tmp/evidence.json
+          test "$code" = '200'
+          node - <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/evidence.json', 'utf8'));
+          const automation = body?.contentOsAutomation;
+          if (body.ok !== true) process.exit(1);
+          if (!automation || automation.httpStatus !== 200 || automation.ok !== true) process.exit(1);
+          if (automation.source !== 'n8n_or_openclaw') process.exit(1);
+          if (!Array.isArray(automation.allowedWorkflows) || !automation.allowedWorkflows.includes('topic_research')) process.exit(1);
+          console.log(`AUTOMATION_CONFIGURED=${automation.configured === true}`);
+          console.log(`AUTOMATION_ENABLED=${automation.enabled === true}`);
+          console.log(`AUTOMATION_MODE=${automation.mode}`);
+          NODE
+      - name: Verify OpenClaw automation-status route is fail-closed without OpenClaw bearer
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/automation-unauth.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/automation-status")
+          cat /tmp/automation-unauth.json
+          test "$code" = '401'

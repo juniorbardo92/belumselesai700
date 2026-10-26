@@ -1,0 +1,32 @@
+{
+  "id": "umkm-content-os",
+  "name": "UMKM Content OS",
+  "description": "Calls the fixed UMKM Content OS topic-research, read-only account-audit, and viral-analysis workflows through n8n.",
+  "version": "1.2.0",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "contracts": {
+    "tools": [
+      "umkm_topic_research",
+      "umkm_account_audit",
+      "umkm_viral_analyzer"
+    ]
+  },
+  "toolMetadata": {
+    "umkm_topic_research": {
+      "optional": true
+    },
+    "umkm_account_audit": {
+      "optional": true
+    },
+    "umkm_viral_analyzer": {
+      "optional": true
+    }
+  }
+}

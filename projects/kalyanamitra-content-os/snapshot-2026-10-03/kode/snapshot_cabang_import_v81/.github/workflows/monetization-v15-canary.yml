@@ -1,0 +1,415 @@
+name: Monetization v15 Ephemeral Manual Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_version_id:
+        description: Exact currently deployed v14 version ID
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact 40-character commit SHA validated for this candidate
+        required: true
+        type: string
+      confirmation:
+        description: Type CANARY_V15_1_PERCENT_THEN_RESTORE only with an operator/watchdog ready for runner-loss rollback
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: monetization-canary
+    steps:
+      - name: Require explicit ephemeral-canary approval
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          BASELINE_VERSION_ID: ${{ inputs.baseline_version_id }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = 'CANARY_V15_1_PERCENT_THEN_RESTORE'
+          echo "$BASELINE_VERSION_ID" | grep -Eq '^[a-f0-9-]{36}$'
+          echo "$CANDIDATE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          test "$CANDIDATE_SHA" = "$GITHUB_SHA"
+          echo "CANARY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/wrangler-empty"
+          echo "WRANGLER_EMPTY_CWD=$RUNNER_TEMP/wrangler-empty" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate source, regression, and candidate bundle
+        run: npm run check:all
+      - name: Require a clean 100-percent baseline
+        env:
+          BASELINE_VERSION_ID: ${{ inputs.baseline_version_id }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > before.json
+          node - "$BASELINE_VERSION_ID" before.json <<'NODE'
+          const fs=require('fs');
+          const [expected,file]=process.argv.slice(2);
+          const raw=JSON.parse(fs.readFileSync(file,'utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          if(versions.length!==1) throw new Error(`expected one baseline version, found ${versions.length}`);
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const percent=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(id!==expected||percent!==100) throw new Error(`baseline mismatch ${id}@${percent}`);
+          NODE
+      - name: Require all additive schema migrations already applied
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT name FROM d1_migrations WHERE name IN ('0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql') ORDER BY name;" > schema-preflight.raw.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT name,type,sql FROM sqlite_master WHERE name IN ('monetization_api_rate_limits','monetization_analytics_snapshots','monetization_daily_analytics_v15','monetization_record_quality','monetization_record_quality_history','monetization_quality_history_no_update','monetization_quality_history_no_delete','idx_monetization_rate_limits_expiry','idx_monetization_events_brand_time','idx_monetization_revenue_brand_time','idx_monetization_daily_brand_day','idx_monetization_touchpoints_event','idx_monetization_analytics_snapshots_latest','idx_monetization_daily_v15_snapshot_day','idx_monetization_record_quality_scope','idx_monetization_quality_history_record') ORDER BY name;" > schema-objects.raw.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT 'monetization_api_rate_limits' AS table_name,cid,name,type,\"notnull\" AS not_null,dflt_value,pk FROM pragma_table_info('monetization_api_rate_limits') UNION ALL SELECT 'monetization_analytics_snapshots',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_analytics_snapshots') UNION ALL SELECT 'monetization_daily_analytics_v15',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_daily_analytics_v15') UNION ALL SELECT 'monetization_record_quality',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_record_quality') UNION ALL SELECT 'monetization_record_quality_history',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_record_quality_history') ORDER BY table_name,cid;" > schema-columns.raw.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT 'monetization_analytics_snapshots' AS table_name,[table] AS target_table,[from] AS from_column,[to] AS to_column,on_delete FROM pragma_foreign_key_list('monetization_analytics_snapshots') UNION ALL SELECT 'monetization_daily_analytics_v15',[table],[from],[to],on_delete FROM pragma_foreign_key_list('monetization_daily_analytics_v15') ORDER BY table_name,from_column;" > schema-foreign-keys.raw.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT 'idx_monetization_rate_limits_expiry' AS index_name,seqno,name FROM pragma_index_info('idx_monetization_rate_limits_expiry') UNION ALL SELECT 'idx_monetization_events_brand_time',seqno,name FROM pragma_index_info('idx_monetization_events_brand_time') UNION ALL SELECT 'idx_monetization_revenue_brand_time',seqno,name FROM pragma_index_info('idx_monetization_revenue_brand_time') UNION ALL SELECT 'idx_monetization_daily_brand_day',seqno,name FROM pragma_index_info('idx_monetization_daily_brand_day') UNION ALL SELECT 'idx_monetization_touchpoints_event',seqno,name FROM pragma_index_info('idx_monetization_touchpoints_event') UNION ALL SELECT 'idx_monetization_analytics_snapshots_latest',seqno,name FROM pragma_index_info('idx_monetization_analytics_snapshots_latest') UNION ALL SELECT 'idx_monetization_daily_v15_snapshot_day',seqno,name FROM pragma_index_info('idx_monetization_daily_v15_snapshot_day') UNION ALL SELECT 'idx_monetization_record_quality_scope',seqno,name FROM pragma_index_info('idx_monetization_record_quality_scope') UNION ALL SELECT 'idx_monetization_quality_history_record',seqno,name FROM pragma_index_info('idx_monetization_quality_history_record') ORDER BY index_name,seqno;" > schema-index-columns.raw.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('schema-preflight.raw.json','utf8'));
+          const names=(raw?.[0]?.results??[]).map(row=>row.name).sort();
+          const expected=['0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql'].sort();
+          if(JSON.stringify(names)!==JSON.stringify(expected)) throw new Error(`schema not prepared: ${names}`);
+          const objects=JSON.parse(fs.readFileSync('schema-objects.raw.json','utf8'))?.[0]?.results??[];
+          const expectedTypes={
+            monetization_analytics_snapshots:'table',monetization_api_rate_limits:'table',monetization_daily_analytics_v15:'table',
+            monetization_record_quality:'table',monetization_record_quality_history:'table',
+            monetization_quality_history_no_update:'trigger',monetization_quality_history_no_delete:'trigger',
+            idx_monetization_rate_limits_expiry:'index',idx_monetization_events_brand_time:'index',idx_monetization_revenue_brand_time:'index',
+            idx_monetization_daily_brand_day:'index',idx_monetization_touchpoints_event:'index',idx_monetization_analytics_snapshots_latest:'index',
+            idx_monetization_daily_v15_snapshot_day:'index',idx_monetization_record_quality_scope:'index',idx_monetization_quality_history_record:'index'
+          };
+          const objectNames=objects.map(row=>row.name).sort();
+          if(JSON.stringify(objectNames)!==JSON.stringify(Object.keys(expectedTypes).sort())||objects.some(row=>row.type!==expectedTypes[row.name])){
+            throw new Error(`schema object mismatch: ${JSON.stringify(objects.map(({name,type})=>({name,type})))}`);
+          }
+          const columns=JSON.parse(fs.readFileSync('schema-columns.raw.json','utf8'))?.[0]?.results??[];
+          const expectedColumns={
+            monetization_api_rate_limits:['scope:TEXT:1:NULL:1','window_start:TEXT:1:NULL:2','count:INTEGER:1:0:0','expires_at:TEXT:1:NULL:0'],
+            monetization_analytics_snapshots:["id:TEXT:0:NULL:1","brand_id:TEXT:1:NULL:0","data_scope:TEXT:1:NULL:0","period_days:INTEGER:1:NULL:0","status:TEXT:1:'preparing':0","error_message:TEXT:0:NULL:0","created_at:TEXT:1:CURRENT_TIMESTAMP:0","completed_at:TEXT:0:NULL:0"],
+            monetization_daily_analytics_v15:["snapshot_id:TEXT:1:NULL:1","day:TEXT:1:NULL:2","brand_id:TEXT:1:NULL:3","content_item_id:TEXT:1:'':4","campaign_id:TEXT:1:'':5","offer_id:TEXT:1:'':6","platform:TEXT:1:'':7","impressions:INTEGER:1:0:0","views:INTEGER:1:0:0","clicks:INTEGER:1:0:0","leads:INTEGER:1:0:0","checkouts:INTEGER:1:0:0","conversion_events:INTEGER:1:0:0","confirmed_transactions:INTEGER:1:0:0","reversals:INTEGER:1:0:0","gross_revenue:INTEGER:1:0:0","net_revenue:INTEGER:1:0:0","contribution_margin:INTEGER:1:0:0","created_at:TEXT:1:CURRENT_TIMESTAMP:0"],
+            monetization_record_quality:["record_type:TEXT:1:NULL:1","record_id:TEXT:1:NULL:2","data_class:TEXT:1:'unknown':0","verification_status:TEXT:1:'unverified':0","amount_basis:TEXT:0:NULL:0","fee_status:TEXT:0:NULL:0","cost_status:TEXT:0:NULL:0","evidence_ref:TEXT:0:NULL:0","reason:TEXT:0:NULL:0","metadata_json:TEXT:1:'{}':0","created_at:TEXT:1:CURRENT_TIMESTAMP:0","updated_at:TEXT:1:CURRENT_TIMESTAMP:0"],
+            monetization_record_quality_history:["sequence:INTEGER:0:NULL:1","id:TEXT:1:NULL:0","record_type:TEXT:1:NULL:0","record_id:TEXT:1:NULL:0","previous_data_class:TEXT:0:NULL:0","previous_verification_status:TEXT:0:NULL:0","previous_evidence_ref:TEXT:0:NULL:0","previous_reason:TEXT:0:NULL:0","previous_metadata_json:TEXT:0:NULL:0","new_data_class:TEXT:1:NULL:0","new_verification_status:TEXT:1:NULL:0","evidence_ref:TEXT:0:NULL:0","reason:TEXT:0:NULL:0","new_metadata_json:TEXT:0:NULL:0","actor_type:TEXT:1:NULL:0","correlation_id:TEXT:0:NULL:0","metadata_json:TEXT:1:'{}':0","created_at:TEXT:1:CURRENT_TIMESTAMP:0"]
+          };
+          for(const [table,shape] of Object.entries(expectedColumns)){
+            const actual=columns.filter(row=>row.table_name===table).sort((a,b)=>Number(a.cid)-Number(b.cid)).map(row=>`${row.name}:${String(row.type).toUpperCase()}:${Number(row.not_null)}:${row.dflt_value===null?'NULL':String(row.dflt_value)}:${Number(row.pk)}`);
+            if(JSON.stringify(actual)!==JSON.stringify(shape)) throw new Error(`${table} column shape mismatch: ${actual}`);
+          }
+          const foreignKeys=JSON.parse(fs.readFileSync('schema-foreign-keys.raw.json','utf8'))?.[0]?.results??[];
+          const actualForeignKeys=foreignKeys.map(row=>`${row.table_name}:${row.from_column}:${row.target_table}:${row.to_column}:${String(row.on_delete).toUpperCase()}`).sort();
+          const expectedForeignKeys=['monetization_analytics_snapshots:brand_id:brands:id:CASCADE','monetization_daily_analytics_v15:brand_id:brands:id:CASCADE','monetization_daily_analytics_v15:snapshot_id:monetization_analytics_snapshots:id:CASCADE'].sort();
+          if(JSON.stringify(actualForeignKeys)!==JSON.stringify(expectedForeignKeys)) throw new Error(`foreign key mismatch: ${actualForeignKeys}`);
+          const indexRows=JSON.parse(fs.readFileSync('schema-index-columns.raw.json','utf8'))?.[0]?.results??[];
+          const expectedIndexes={
+            idx_monetization_rate_limits_expiry:['expires_at'],idx_monetization_events_brand_time:['brand_id','occurred_at'],idx_monetization_revenue_brand_time:['brand_id','occurred_at'],
+            idx_monetization_daily_brand_day:['brand_id','day'],idx_monetization_touchpoints_event:['event_id'],idx_monetization_analytics_snapshots_latest:['brand_id','data_scope','status','completed_at'],
+            idx_monetization_daily_v15_snapshot_day:['snapshot_id','day'],idx_monetization_record_quality_scope:['record_type','data_class','verification_status'],idx_monetization_quality_history_record:['record_type','record_id','created_at']
+          };
+          for(const [index,indexColumns] of Object.entries(expectedIndexes)){
+            const actual=indexRows.filter(row=>row.index_name===index).sort((a,b)=>Number(a.seqno)-Number(b.seqno)).map(row=>row.name);
+            if(JSON.stringify(actual)!==JSON.stringify(indexColumns)) throw new Error(`${index} column mismatch: ${actual}`);
+          }
+          const compactSql=new Map(objects.map(row=>[row.name,String(row.sql??'').replace(/\s+/g,'').toLowerCase()]));
+          const expectedTableSql={
+            monetization_api_rate_limits:'createtablemonetization_api_rate_limits(scopetextnotnull,window_starttextnotnull,countintegernotnulldefault0,expires_attextnotnull,primarykey(scope,window_start))',
+            monetization_analytics_snapshots:"createtablemonetization_analytics_snapshots(idtextprimarykey,brand_idtextnotnull,data_scopetextnotnullcheck(data_scopein('verified-production','legacy-unclassified')),period_daysintegernotnull,statustextnotnulldefault'preparing'check(statusin('preparing','complete','error')),error_messagetext,created_attextnotnulldefaultcurrent_timestamp,completed_attext,foreignkey(brand_id)referencesbrands(id)ondeletecascade)",
+            monetization_daily_analytics_v15:"createtablemonetization_daily_analytics_v15(snapshot_idtextnotnull,daytextnotnull,brand_idtextnotnull,content_item_idtextnotnulldefault'',campaign_idtextnotnulldefault'',offer_idtextnotnulldefault'',platformtextnotnulldefault'',impressionsintegernotnulldefault0,viewsintegernotnulldefault0,clicksintegernotnulldefault0,leadsintegernotnulldefault0,checkoutsintegernotnulldefault0,conversion_eventsintegernotnulldefault0,confirmed_transactionsintegernotnulldefault0,reversalsintegernotnulldefault0,gross_revenueintegernotnulldefault0,net_revenueintegernotnulldefault0,contribution_marginintegernotnulldefault0,created_attextnotnulldefaultcurrent_timestamp,primarykey(snapshot_id,day,brand_id,content_item_id,campaign_id,offer_id,platform),foreignkey(snapshot_id)referencesmonetization_analytics_snapshots(id)ondeletecascade,foreignkey(brand_id)referencesbrands(id)ondeletecascade)",
+            monetization_record_quality:"createtablemonetization_record_quality(record_typetextnotnullcheck(record_typein('event','revenue_event','learning_insight')),record_idtextnotnull,data_classtextnotnulldefault'unknown'check(data_classin('production','acceptance','synthetic','internal_test','unknown')),verification_statustextnotnulldefault'unverified'check(verification_statusin('verified','unverified')),amount_basistextcheck(amount_basisisnulloramount_basisin('provider_reported','system_derived','manual','unknown')),fee_statustextcheck(fee_statusisnullorfee_statusin('actual','estimated','not_applicable','unknown')),cost_statustextcheck(cost_statusisnullorcost_statusin('actual','estimated','not_applicable','unknown')),evidence_reftext,reasontext,metadata_jsontextnotnulldefault'{}',created_attextnotnulldefaultcurrent_timestamp,updated_attextnotnulldefaultcurrent_timestamp,primarykey(record_type,record_id))",
+            monetization_record_quality_history:"createtablemonetization_record_quality_history(sequenceintegerprimarykeyautoincrement,idtextnotnullunique,record_typetextnotnullcheck(record_typein('event','revenue_event','learning_insight')),record_idtextnotnull,previous_data_classtext,previous_verification_statustext,previous_evidence_reftext,previous_reasontext,previous_metadata_jsontext,new_data_classtextnotnullcheck(new_data_classin('production','acceptance','synthetic','internal_test','unknown')),new_verification_statustextnotnullcheck(new_verification_statusin('verified','unverified')),evidence_reftext,reasontext,new_metadata_jsontext,actor_typetextnotnull,correlation_idtext,metadata_jsontextnotnulldefault'{}',created_attextnotnulldefaultcurrent_timestamp)"
+          };
+          for(const [name,sql] of Object.entries(expectedTableSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} SQL mismatch`);
+          const expectedIndexSql={
+            idx_monetization_rate_limits_expiry:'createindexidx_monetization_rate_limits_expiryonmonetization_api_rate_limits(expires_at)',
+            idx_monetization_events_brand_time:'createindexidx_monetization_events_brand_timeonmonetization_events(brand_id,occurred_atdesc)',
+            idx_monetization_revenue_brand_time:'createindexidx_monetization_revenue_brand_timeonmonetization_revenue_events(brand_id,occurred_atdesc)',
+            idx_monetization_daily_brand_day:'createindexidx_monetization_daily_brand_dayonmonetization_daily_analytics(brand_id,daydesc)',
+            idx_monetization_touchpoints_event:'createindexidx_monetization_touchpoints_eventonmonetization_touchpoints(event_id)',
+            idx_monetization_analytics_snapshots_latest:'createindexidx_monetization_analytics_snapshots_latestonmonetization_analytics_snapshots(brand_id,data_scope,status,completed_atdesc)',
+            idx_monetization_daily_v15_snapshot_day:'createindexidx_monetization_daily_v15_snapshot_dayonmonetization_daily_analytics_v15(snapshot_id,daydesc)',
+            idx_monetization_record_quality_scope:'createindexidx_monetization_record_quality_scopeonmonetization_record_quality(record_type,data_class,verification_status)',
+            idx_monetization_quality_history_record:'createindexidx_monetization_quality_history_recordonmonetization_record_quality_history(record_type,record_id,created_atdesc)'
+          };
+          for(const [name,sql] of Object.entries(expectedIndexSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} SQL mismatch`);
+          const expectedTriggerSql={
+            monetization_quality_history_no_update:"createtriggermonetization_quality_history_no_updatebeforeupdateonmonetization_record_quality_historybeginselectraise(abort,'monetization_record_quality_historyisappend-only');end",
+            monetization_quality_history_no_delete:"createtriggermonetization_quality_history_no_deletebeforedeleteonmonetization_record_quality_historybeginselectraise(abort,'monetization_record_quality_historyisappend-only');end"
+          };
+          for(const [name,sql] of Object.entries(expectedTriggerSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} body mismatch or unexpected WHEN clause`);
+          fs.writeFileSync('schema-preflight.json',JSON.stringify({ok:true,applied:names,objectTypes:expectedTypes,columnShapes:expectedColumns,foreignKeys:expectedForeignKeys,indexColumns:expectedIndexes,qualityHistoryChecks:true},null,2));
+          NODE
+          rm -f schema-preflight.raw.json schema-objects.raw.json schema-columns.raw.json schema-foreign-keys.raw.json schema-index-columns.raw.json
+      - name: Refuse upload unless remote preview URLs are disabled
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 20 --retry 3 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/umkm-monetization-engine/subdomain" > preview-policy.raw.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('preview-policy.raw.json','utf8'));
+          if(raw?.success!==true||raw?.result?.previews_enabled!==false){
+            throw new Error('remote version previews must be disabled before candidate upload');
+          }
+          fs.writeFileSync('preview-policy.json',JSON.stringify({ok:true,previewsEnabled:false},null,2));
+          NODE
+          rm -f preview-policy.raw.json
+      - name: Upload candidate without traffic or preview alias
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          TAG="v15-${GITHUB_SHA::12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "CANDIDATE_TAG=$TAG" >> "$GITHUB_ENV"
+          npx wrangler versions upload --config wrangler.monetization.candidate.jsonc --keep-vars --strict --tag "$TAG" --message "PR7 v15 candidate ${GITHUB_SHA}" | tee upload-output.txt
+          npx wrangler versions list --json --config wrangler.monetization.candidate.jsonc > versions-after-upload.json
+          curl --silent --show-error --fail --max-time 20 --retry 3 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/umkm-monetization-engine/subdomain" > preview-policy-after.raw.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('preview-policy-after.raw.json','utf8'));
+          if(raw?.success!==true||raw?.result?.previews_enabled!==false) throw new Error('candidate upload changed remote preview policy');
+          fs.writeFileSync('preview-policy-after.json',JSON.stringify({ok:true,previewsEnabled:false},null,2));
+          NODE
+          rm -f preview-policy-after.raw.json
+      - name: Resolve candidate and require exact safe bindings
+        id: candidate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          CANDIDATE_ID=$(node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('versions-after-upload.json','utf8'));
+          const versions=Array.isArray(raw)?raw:(raw.versions??raw.items??[]);
+          const matches=versions.filter(v=>(v.tag??v.annotations?.['workers/tag'])===process.env.CANDIDATE_TAG);
+          if(matches.length!==1) throw new Error(`expected one candidate tag match, found ${matches.length}`);
+          const id=matches[0]?.id??matches[0]?.version_id??matches[0]?.versionId;
+          if(!id) throw new Error('candidate version ID not found');
+          process.stdout.write(id);
+          NODE
+          )
+          echo "candidate_version_id=$CANDIDATE_ID" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_ID=$CANDIDATE_ID" >> "$GITHUB_ENV"
+          npx wrangler versions view "$CANDIDATE_ID" --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > candidate-bindings.raw.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('candidate-bindings.raw.json','utf8'));
+          const bindings=raw?.resources?.bindings;
+          if(!Array.isArray(bindings)) throw new Error('candidate binding inventory missing');
+          const requiredTypes={
+            APP_RECEIPT_SECRET:'secret_text',MONETIZATION_INGEST_TOKEN:'secret_text',MONETIZATION_QUALITY_TOKEN:'secret_text',LYNK_WEBHOOK_SECRET:'secret_text',
+            DB:'d1',CONTENT_OS:'service',MONETIZATION_QUEUE:'queue',CF_VERSION_METADATA:'version_metadata'
+          };
+          for(const [name,type] of Object.entries(requiredTypes)){
+            const matches=bindings.filter(binding=>binding?.name===name);
+            if(matches.length!==1||matches[0]?.type!==type) throw new Error(`candidate binding ${name} must exist exactly once as ${type}`);
+          }
+          const maintenance=bindings.filter(binding=>binding?.name==='MONETIZATION_V15_MAINTENANCE_ENABLED');
+          if(maintenance.length>1) throw new Error('duplicate maintenance binding');
+          if(maintenance.length===1){
+            const binding=maintenance[0];
+            if(binding.type!=='plain_text'&&binding.type!=='json') throw new Error('maintenance binding cannot be attested disabled');
+            const value=binding.type==='plain_text'?binding.text:binding.json;
+            if(value===true||String(value??'').trim().toLowerCase()==='true') throw new Error('maintenance must remain disabled during canary');
+          }
+          fs.writeFileSync('candidate-bindings.json',JSON.stringify({ok:true,requiredBindingTypes:requiredTypes,maintenanceEnabled:false},null,2));
+          NODE
+          rm -f candidate-bindings.raw.json
+      - name: Re-check baseline immediately before traffic change
+        env:
+          BASELINE_VERSION_ID: ${{ inputs.baseline_version_id }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > before-deploy.json
+          node - "$BASELINE_VERSION_ID" before-deploy.json <<'NODE'
+          const fs=require('fs');
+          const [expected,file]=process.argv.slice(2);
+          const raw=JSON.parse(fs.readFileSync(file,'utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const percent=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!==expected||percent!==100) throw new Error('baseline changed before canary');
+          NODE
+      - name: Reserve rollback time before changing traffic
+        run: |
+          set -euo pipefail
+          now=$(date +%s)
+          elapsed=$((now-CANARY_JOB_STARTED_EPOCH))
+          test "$elapsed" -ge 0
+          if [ "$elapsed" -gt 900 ]; then
+            echo "Refusing traffic change after ${elapsed}s; the job no longer has the reserved 30-minute rollback budget." >&2
+            exit 1
+          fi
+      - name: Deploy exactly one percent
+        id: traffic
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          echo 'External gate: an operator/watchdog must remain ready to restore the exact v14 baseline if this runner is lost or force-cancelled.' >> "$GITHUB_STEP_SUMMARY"
+          timeout --foreground 180s npx wrangler versions deploy "${{ inputs.baseline_version_id }}@99%" "$CANDIDATE_ID@1%" --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine --message "PR7 v15 ephemeral one-percent canary" -y
+      - name: Verify split and exact candidate runtime
+        env:
+          BASELINE_VERSION_ID: ${{ inputs.baseline_version_id }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          timeout --foreground 120s npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > after.json
+          node - "$BASELINE_VERSION_ID" "$CANDIDATE_ID" after.json <<'NODE'
+          const fs=require('fs');
+          const [baseline,candidate,file]=process.argv.slice(2);
+          const raw=JSON.parse(fs.readFileSync(file,'utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const map=new Map(versions.map(v=>[v.version_id??v.versionId??v.id,Number(v.percentage??v.traffic_percentage)]));
+          if(versions.length!==2||map.get(baseline)!==99||map.get(candidate)!==1) throw new Error(`unexpected split ${JSON.stringify([...map])}`);
+          NODE
+          curl --silent --show-error --fail --max-time 20 --retry 3 --retry-all-errors -H "Cloudflare-Workers-Version-Overrides: umkm-monetization-engine=\"$CANDIDATE_ID\"" 'https://go.umkmnaikkelas.id/api/monetization/version' > candidate-production-version.json
+          CANDIDATE_ID="$CANDIDATE_ID" node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('candidate-production-version.json','utf8'));
+          if(body.ok!==true||body.version!=='1.1.0-hardening-v15-candidate') throw new Error('candidate version contract mismatch');
+          if(body.runtimeVersion?.id!==process.env.CANDIDATE_ID) throw new Error(`candidate runtime mismatch: ${body.runtimeVersion?.id}`);
+          const security=body.securityConfiguration??{};
+          const required=['ingestTokenConfigured','qualityTokenIsolated','appReceiptSecretIsolated','lynkWebhookSecretIsolated','allSecretsPresentAndDistinct'];
+          if(required.some(field=>security[field]!==true)) throw new Error(`candidate secret-domain isolation failed: ${required.filter(field=>security[field]!==true)}`);
+          NODE
+          code=$(curl --silent --show-error --max-time 20 --retry 3 --retry-all-errors --output candidate-dashboard.txt --write-out '%{http_code}' -H "Cloudflare-Workers-Version-Overrides: umkm-monetization-engine=\"$CANDIDATE_ID\"" 'https://go.umkmnaikkelas.id/monetization')
+          test "$code" = '302'
+          sleep 60
+          timeout --foreground 120s npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > after-observation.json
+          cmp after.json after-observation.json
+      - name: Restore and assert exact baseline at 100 percent
+        if: ${{ always() && steps.traffic.outcome != 'skipped' }}
+        env:
+          BASELINE_VERSION_ID: ${{ inputs.baseline_version_id }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          echo "$BASELINE_VERSION_ID" | grep -Eq '^[a-f0-9-]{36}$'
+          echo "$CANDIDATE_ID" | grep -Eq '^[a-f0-9-]{36}$'
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/umkm-monetization-engine/deployments"
+          RESTORE_API="${API}?force=true"
+          fetched=false
+          for attempt in 1 2 3 4 5 6; do
+            if curl --silent --show-error --fail --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API" > restore-before.attempt.json; then
+              if node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('restore-before.attempt.json','utf8'));
+          if(raw?.success!==true||!Array.isArray(raw?.result?.deployments)||!raw.result.deployments.length) process.exit(1);
+          NODE
+              then
+                mv restore-before.attempt.json restore-before.json
+                fetched=true
+                break
+              fi
+            fi
+            sleep 3
+          done
+          test "$fetched" = 'true'
+          RESTORE_NEEDED=$(node - "$BASELINE_VERSION_ID" "$CANDIDATE_ID" <<'NODE'
+          const fs=require('fs');
+          const [baseline,candidate]=process.argv.slice(2);
+          const raw=JSON.parse(fs.readFileSync('restore-before.json','utf8'));
+          const versions=raw.result.deployments[0].versions??[];
+          const normalized=versions.map(v=>({id:v.version_id,percent:Number(v.percentage)}));
+          const clean=normalized.length===1&&normalized[0].id===baseline&&normalized[0].percent===100;
+          const ids=new Set(normalized.map(v=>v.id));
+          if(!clean&&(normalized.length>2||!ids.has(candidate)||[...ids].some(id=>id!==baseline&&id!==candidate))){
+            throw new Error(`foreign deployment detected; refusing overwrite: ${JSON.stringify(normalized)}`);
+          }
+          process.stdout.write(clean?'false':'true');
+          NODE
+          )
+          if [ "$RESTORE_NEEDED" = 'true' ]; then
+            node - "$BASELINE_VERSION_ID" <<'NODE'
+          const fs=require('fs');
+          const baseline=process.argv[2];
+          fs.writeFileSync('restore-request.json',JSON.stringify({strategy:'percentage',versions:[{version_id:baseline,percentage:100}],annotations:{'workers/message':'Automatic restore after PR7 ephemeral canary','workers/triggered_by':'rollback'}},null,2));
+          NODE
+            restored=false
+            for attempt in 1 2 3; do
+              if curl --silent --show-error --fail --max-time 20 -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data-binary @restore-request.json "$RESTORE_API" > restore-response.attempt.json; then
+                if BASELINE_VERSION_ID="$BASELINE_VERSION_ID" node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('restore-response.attempt.json','utf8'));
+          const versions=raw?.result?.versions??[];
+          if(raw?.success!==true||versions.length!==1||versions[0]?.version_id!==process.env.BASELINE_VERSION_ID||Number(versions[0]?.percentage)!==100) process.exit(1);
+          NODE
+                then
+                  mv restore-response.attempt.json restore-response.json
+                  restored=true
+                  break
+                fi
+              fi
+              sleep 3
+            done
+            test "$restored" = 'true'
+          fi
+          verified=false
+          for attempt in 1 2 3 4 5 6; do
+            if curl --silent --show-error --fail --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API" > after-rollback.attempt.json && node - "$BASELINE_VERSION_ID" <<'NODE'
+          const fs=require('fs');
+          const expected=process.argv[2];
+          const raw=JSON.parse(fs.readFileSync('after-rollback.attempt.json','utf8'));
+          const versions=raw?.result?.deployments?.[0]?.versions??[];
+          if(raw?.success!==true||versions.length!==1||versions[0]?.version_id!==expected||Number(versions[0]?.percentage)!==100) process.exit(1);
+          NODE
+            then
+              mv after-rollback.attempt.json after-rollback.json
+              verified=true
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" = 'true'
+          printf '{"ok":true,"baselineVersionId":"%s","trafficPercent":100}\n' "$BASELINE_VERSION_ID" > restore-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monetization-v15-ephemeral-canary-evidence
+          path: |
+            before.json
+            before-deploy.json
+            after.json
+            after-observation.json
+            versions-after-upload.json
+            upload-output.txt
+            preview-policy.json
+            preview-policy-after.json
+            schema-preflight.json
+            candidate-bindings.json
+            candidate-production-version.json
+            candidate-dashboard.txt
+            restore-before.json
+            restore-request.json
+            restore-response.json
+            after-rollback.json
+            restore-result.json
+          if-no-files-found: warn
+          retention-days: 14

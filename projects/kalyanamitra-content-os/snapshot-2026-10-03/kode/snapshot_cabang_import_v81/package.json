@@ -1,0 +1,24 @@
+{
+  "name": "umkm-content-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "build:monetization": "wrangler deploy --dry-run --config wrangler.monetization.jsonc --outdir dist-monetization",
+    "build:monetization:candidate": "wrangler versions upload --dry-run --config wrangler.monetization.candidate.jsonc --outdir dist-monetization-candidate",
+    "check": "tsc --noEmit",
+    "check:all": "npm run check && npm run test:content-os:access && npm run test:monetization:v15 && npm run build && npm run build:monetization && npm run build:monetization:candidate",
+    "dev": "wrangler dev",
+    "dev:monetization": "wrangler dev --config wrangler.monetization.jsonc",
+    "dev:monetization:candidate": "wrangler dev --config wrangler.monetization.candidate.jsonc",
+    "types": "wrangler types",
+    "test:content-os:access": "node tests/content-os-access-regression.mjs",
+    "test:monetization:v15": "node tests/monetization-v15-regression.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.32.0"
+  }
+}

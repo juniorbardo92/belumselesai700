@@ -1,0 +1,97 @@
+name: APK Telemetry Observation (Not Device Attestation)
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/apk-real-runtime-evidence.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require real-runtime marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^mode=real-android-runtime-evidence$' activation/apk-real-runtime-evidence.request
+          grep -q '^retain_evidence=yes$' activation/apk-real-runtime-evidence.request
+          test "$(grep -c '^app_version=' activation/apk-real-runtime-evidence.request)" = '1'
+          test "$(grep -c '^event_after_utc=' activation/apk-real-runtime-evidence.request)" = '1'
+          APP_VERSION=$(sed -n 's/^app_version=//p' activation/apk-real-runtime-evidence.request | tail -1)
+          EVENT_AFTER_UTC=$(sed -n 's/^event_after_utc=//p' activation/apk-real-runtime-evidence.request | tail -1)
+          echo "$APP_VERSION" | grep -Eq '^[0-9A-Za-z._+-]{1,40}$'
+          echo "$EVENT_AFTER_UTC" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+          node -e "const t=Date.parse(process.argv[1]),now=Date.now();if(!Number.isFinite(t)||t>now+60000||t<now-2*60*60*1000)process.exit(1)" "$EVENT_AFTER_UTC"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "EVENT_AFTER_UTC=$EVENT_AFTER_UTC" >> "$GITHUB_ENV"
+      - name: Wait for real Android runtime install event
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          found=0
+          for attempt in $(seq 1 40); do
+            if npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+              --command="SELECT id,event_type,source,platform,visitor_id,metadata_json,occurred_at FROM monetization_events WHERE brand_id='brand-umkm-naik-kelas' AND event_type='app_install' AND source='apk' AND platform='app' AND json_extract(metadata_json,'$.appVersion')='$APP_VERSION' AND datetime(occurred_at)>=datetime('$EVENT_AFTER_UTC') ORDER BY datetime(occurred_at) DESC LIMIT 5;" > /tmp/apk-real.json; then
+              if node - <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('/tmp/apk-real.json','utf8'));
+          const rows=x?.[0]?.results??[];
+          process.exit(rows.length>0?0:1);
+          NODE
+              then found=1; break; fi
+            fi
+            sleep 15
+          done
+          test "$found" = '1'
+      - name: Validate privacy-bounded real event
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('/tmp/apk-real.json','utf8'));
+          const rows=x?.[0]?.results??[];
+          if(rows.length<1) throw new Error('real APK install event missing');
+          const row=rows[0];
+          if(row.event_type!=='app_install'||row.source!=='apk'||row.platform!=='app') throw new Error('event classification mismatch');
+          if(typeof row.visitor_id!=='string'||!/^[a-f0-9]{64}$/.test(row.visitor_id)) throw new Error('pseudonymous app instance format mismatch');
+          const m=JSON.parse(row.metadata_json||'{}');
+          if(m.appVersion!==process.env.APP_VERSION||m.devicePlatform!=='android') throw new Error('Android runtime metadata mismatch');
+          if(m?.properties?.client!=='panglima-umkm'||m?.properties?.publicConstrained!==true||m?.properties?.financialFieldsAccepted!==false||m?.properties?.piiExpected!==false) throw new Error('privacy/security metadata mismatch');
+          fs.writeFileSync('apk-telemetry-observation.json',JSON.stringify({
+            classification:'telemetry-row-observed-not-device-attestation',
+            gate:'YELLOW',eventId:row.id,eventType:row.event_type,source:row.source,platform:row.platform,
+            occurredAt:row.occurred_at,appVersion:m.appVersion,devicePlatform:m.devicePlatform,
+            privacyContractValid:true,visitorIdPersistedInArtifact:false
+          },null,2));
+          console.log(`APK_TELEMETRY_EVENT_ID=${row.id}`);
+          console.log('APK_TELEMETRY_ROW=OBSERVED');
+          console.log('APK_DEVICE_ATTESTATION=UNVERIFIED');
+          console.log('APK_GATE=YELLOW');
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-telemetry-observation-yellow
+          path: apk-telemetry-observation.json
+          if-no-files-found: error
+          retention-days: 14

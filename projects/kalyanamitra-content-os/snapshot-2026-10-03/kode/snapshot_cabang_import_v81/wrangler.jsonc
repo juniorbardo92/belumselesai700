@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "umkm-content-os",
+  "main": "src/index-v2.ts",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "https://yellow-snow-4e04.cloudflareaccess.com",
+    "ACCESS_POLICY_AUD": "80c497de0a42e405237143379b05975a61e061ea36bcdabf26a50bbcf1857a31"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "umkm-content-os-db",
+      "database_id": "REPLACE_RESOURCE_ID",
+      "migrations_dir": "database/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "umkm-content-media"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

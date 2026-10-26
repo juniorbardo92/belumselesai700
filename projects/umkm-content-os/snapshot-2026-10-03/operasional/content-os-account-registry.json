@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-09-17",
+  "publisher": "repliz",
+  "routing_policy": {
+    "match_required": [
+      "brand_key",
+      "platform",
+      "repliz_account_id"
+    ],
+    "fail_closed_on_mismatch": true,
+    "allow_cross_brand_fallback": false
+  },
+  "brands": [
+    {
+      "brand_key": "umkmnaikkelas.id",
+      "display_name": "umkmnaikkelas.id",
+      "status": "confirmed",
+      "accounts": {
+        "threads": {
+          "repliz_account_id": "REPLACE_RESOURCE_ID",
+          "enabled": true,
+          "status": "confirmed"
+        },
+        "instagram": {
+          "repliz_account_id": "REPLACE_RESOURCE_ID",
+          "enabled": true,
+          "status": "confirmed"
+        }
+      }
+    },
+    {
+      "brand_key": "ruang-kalyanamitra",
+      "brand_id": "brand-ruang-kalyanamitra",
+      "display_name": "Ruang Kalyanamitra",
+      "status": "confirmed",
+      "accounts": {
+        "threads": {
+          "repliz_account_id": "REPLACE_RESOURCE_ID",
+          "enabled": true,
+          "status": "confirmed"
+        },
+        "instagram": {
+          "repliz_account_id": "REPLACE_RESOURCE_ID",
+          "enabled": true,
+          "status": "confirmed"
+        }
+      }
+    }
+  ]
+}

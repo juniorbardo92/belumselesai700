@@ -1,0 +1,10 @@
+PATCH SEO SUDAH DITERAPKAN PADA SALINAN SOURCE LAMA.
+
+DILARANG menimpa website aktif dengan ZIP ini.
+Sitemap di source lama 26 URL, laporan live 57 URL.
+Patch ini hanya mengubah apps/web/package.json dan menambah tools/generate-static-seo.mjs.
+Fitur gambar dan source React serta folder public identik (SHA256).
+Belum ada build Vite/npm dan tes end-to-end di browser.
+Gunakan ZIP ini sebagai contoh staging saja, atau terapkan PATCH kecil ke ekspor Horizons TERBARU.
+
+Verifikasi setelah staging: HTML unik/title canonical pada /, /buku, /artikel/..., gambar buku/article, zoom, srcSet, CTA dan mobile.

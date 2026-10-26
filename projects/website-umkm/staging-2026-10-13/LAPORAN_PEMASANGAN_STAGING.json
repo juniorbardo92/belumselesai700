@@ -1,0 +1,21 @@
+{
+  "basis": "horizons-export-d95f488b-928f-41bf-8426-97bd78f6dad3.zip",
+  "applied_patch": "Hermes_SEO_ImageSafe_PATCH_2026-10-13.zip",
+  "status": "STAGING_ONLY_NOT_DEPLOYED",
+  "changed_existing_files": [
+    "apps/web/package.json"
+  ],
+  "added_files": [
+    "apps/web/package.json.bak-seo-20261013-131302",
+    "apps/web/tools/generate-static-seo.mjs"
+  ],
+  "files_deleted": [],
+  "src_and_public_unchanged": true,
+  "verified_generator_routes": 61,
+  "generator_expected_articles": 47,
+  "npm_vite_build": "NOT_RUN_dependencies_unavailable",
+  "browser_image_e2e": "NOT_RUN",
+  "sitemap_in_source": 26,
+  "sitemap_in_live_previous_audit": 57,
+  "warning": "DO NOT OVERWRITE LIVE HOSTINGER WITH THIS ARCHIVE. Patch latest source and verify staging."
+}

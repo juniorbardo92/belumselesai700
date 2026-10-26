@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ruangkalyanamitra.local/schemas/kalyanamitra-idea-inbox.v1.json",
+  "title": "Ruang Kalyanamitra Idea Inbox v1",
+  "description": "Manual planning input containing normalized inspiration-only content ideas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "inbox_id",
+    "created_at",
+    "updated_at",
+    "owner_namespace",
+    "language",
+    "timezone",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {"const": "kalyanamitra-idea-inbox.v1"},
+    "inbox_id": {
+      "type": "string",
+      "pattern": "^rk-ideas-[0-9]{8}(?:-[a-z0-9][a-z0-9-]{0,39})?$"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "owner_namespace": {"const": "ruang-kalyanamitra"},
+    "language": {"const": "id-ID"},
+    "timezone": {"const": "Asia/Jakarta"},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {"$ref": "#/$defs/idea"}
+    }
+  },
+  "$defs": {
+    "idea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "idea_id",
+        "source_type",
+        "title",
+        "summary",
+        "source_url",
+        "source_date",
+        "captured_at",
+        "tradition_hint",
+        "time_sensitive",
+        "usage",
+        "priority",
+        "review_status",
+        "reviewed_at",
+        "reviewed_by",
+        "privacy_status",
+        "status",
+        "tags",
+        "used_in_external_ids"
+      ],
+      "properties": {
+        "idea_id": {
+          "type": "string",
+          "pattern": "^idea-[a-z0-9][a-z0-9-]{2,63}$"
+        },
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "audience-question",
+            "community-observation",
+            "internal-note",
+            "content-performance",
+            "buddhist-calendar",
+            "scripture-topic",
+            "teacher-article",
+            "social-trend",
+            "current-event",
+            "other"
+          ]
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 240},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "source_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "maxLength": 1000
+        },
+        "source_date": {"type": ["string", "null"], "format": "date"},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "tradition_hint": {
+          "type": "string",
+          "enum": [
+            "theravada",
+            "mahayana",
+            "vajrayana",
+            "cross-tradition",
+            "general-buddhist",
+            "unknown"
+          ]
+        },
+        "time_sensitive": {"type": "boolean"},
+        "usage": {"const": "inspiration-only"},
+        "priority": {"type": "integer", "minimum": 1, "maximum": 5},
+        "review_status": {
+          "type": "string",
+          "enum": ["needs-review", "reviewed-by-human"]
+        },
+        "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+        "reviewed_by": {"type": ["string", "null"], "maxLength": 160},
+        "privacy_status": {
+          "type": "string",
+          "enum": [
+            "public-source",
+            "anonymized-private-input",
+            "user-owned",
+            "needs-review"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "used", "archived"]
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 60}
+        },
+        "source_note": {"type": "string", "maxLength": 500},
+        "used_in_external_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^rk-[0-9]{8}-0[1-5]$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"review_status": {"const": "reviewed-by-human"}},
+            "required": ["review_status"]
+          },
+          "then": {
+            "properties": {
+              "reviewed_at": {"type": "string", "format": "date-time"},
+              "reviewed_by": {"type": "string", "minLength": 1, "maxLength": 160}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

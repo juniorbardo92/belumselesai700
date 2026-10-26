@@ -1,0 +1,123 @@
+{
+ "_id": "6ad30a2c601f5a0361a6ad5b",
+ "title": "",
+ "description": "Pembeli dari luar kota bertanya: \"Bisa kirim ke Makassar?\"\n\nAnda jawab cepat: \"Bisa, ongkirnya sekitar Rp25.000.\"\n\nPaket dikemas, ditimbang, dibayar ke kurir: Rp38.000.\n\nSelisih Rp13.000 itu Anda yang tanggung. Sekali terasa kecil. Kalau terjadi beberapa kali dalam sebulan, untung dari kiriman luar kota bisa habis di situ.",
+ "topic": "",
+ "type": "text",
+ "medias": [],
+ "meta": {
+  "title": "",
+  "description": "",
+  "url": ""
+ },
+ "status": "success",
+ "scheduleAt": "2026-10-18T08:00:00.000Z",
+ "replies": [
+  {
+   "type": "text",
+   "description": "Ada dua angka yang dipakai layanan kirim, bukan satu.\n\nBerat timbang: paket utuh di atas timbangan, termasuk kardus, bubble, dan label.\n\nBerat volume: ukuran kardus diubah jadi angka berat, dipakai kalau kardusnya besar tetapi isinya ringan.\n\nYang ditagih adalah angka yang lebih besar dari keduanya. Kardus besar berisi barang ringan bisa lebih mahal daripada dugaan Anda. Cek di nota kurir apakah hitungan itu berlaku.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18074291591735283",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Timbang setelah paket benar-benar siap kirim, bukan setelah barangnya selesai dibungkus separuh.\n\nAlat: timbangan dapur digital yang muat paket Anda. Letakkan di meja rata, tunggu angkanya diam, catat dalam kilogram.\n\nBarang yang di deskripsi tertulis 800 gram bisa jadi 1,3 kg setelah kardus, bubble, dan lakban ikut naik timbangan. Kurir menagih paket jadi, bukan barangnya saja.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18002142911806912",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Ukur kardus yang sudah dilakban: panjang, lebar, tinggi, dalam sentimeter, di sisi luar.\n\nBanyak layanan memakai pembagi 6.000 untuk kiriman biasa, tetapi angkanya bisa berbeda antar layanan. Tanyakan yang Anda pakai, sekalian aturan pembulatan beratnya.\n\nContoh: kardus 30 x 20 x 15 = 9.000 cm3. Dibagi 6.000 = 1,5 kg berat volume. Kalau timbangan menunjukkan 1,2 kg, kurir menagih 1,5 kg.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "17913837861469598",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Siapkan dua sampai tiga ukuran kardus yang paling banyak Anda pakai. Misal kecil 20 x 15 x 10, sedang 30 x 20 x 15, besar 40 x 30 x 20.\n\nHitung berat volume tiap ukuran sekali saja, lalu tulis angkanya di dinding kardus dengan spidol: \"vol 1,5 kg\". Sekali hitung, dipakai berbulan-bulan.\n\nStandarkan isian: satu lapis bubble, satu lapis kertas. Isian yang berubah-ubah membuat berat paket susah diduga.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "17924610744440731",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Buat daftar ongkir sendiri untuk lima sampai sepuluh kota tujuan utama Anda. Ambil dari aplikasi kurir: tarif kilogram pertama dan tarif tambahan per kilogram berikutnya.\n\nHitung juga biaya packing per paket: kardus + bubble + lakban + label, dibagi jumlah paket yang Anda beli sekali banyak.\n\nRumus tagihan: kg pertama + (sisa berat x tarif tambahan) + packing. Contoh: 1,5 kg dengan kg pertama Rp20.000 dan tambahan Rp10.000 = Rp25.000, plus packing Rp4.000, tagih Rp29.000.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18152376721558892",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Saat pembeli bertanya sebelum paket dikemas, jawab dengan rentang dan satu syarat.\n\n\"Untuk kardus sedang ke Makassar sekitar Rp29.000 sampai Rp33.000. Angka final setelah paket ditimbang. Kalau selisihnya di atas Rp5.000, saya kabari dulu sebelum kirim.\"\n\nRentang itu diambil dari daftar ongkir Anda, bukan dari ingatan. Pembeli tahu angkanya bisa berubah, dan Anda punya dasar untuk menagih selisih.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18115283714467727",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Catat tiap kiriman: tanggal | kota | berat terpakai | ongkir dibayar | ongkir ditagih | selisih.\n\nPeriksa tiap pekan. Dua pekan berturut minus? Naikkan tarif. Plus terus? Periksa, jangan sampai pembeli menanggung pembulatan yang tak dijelaskan.\n\nPekan ini: timbangan, angka volume di kardus, daftar ongkir lima kota, tabel selisih.\n\nKalau ingin menata hitungan ongkir lebih rapi, ada Paket Panglima UMKM 30 Hari (Rp349.000), pendampingan pemilik usaha. Tulis \"ONGKIR\" di komentar atau DM.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "17961585615237035",
+   "errorMessage": null
+  }
+ ],
+ "additionalInfo": {
+  "isAiGenerated": false,
+  "isDraft": false,
+  "isAutoAddMusic": false,
+  "isShareToFeed": false,
+  "collaborators": [],
+  "music": {
+   "id": "",
+   "artist": "",
+   "name": "",
+   "thumbnail": "",
+   "volume": {
+    "video": 50,
+    "music": 100
+   }
+  },
+  "products": [],
+  "tags": [],
+  "mentions": [],
+  "link": "",
+  "targetCountries": []
+ },
+ "accountId": "6a8e2fc362caae1e04063419",
+ "userId": "6a8d2bade0b28847274e37d8",
+ "createdAt": "2026-10-17T05:39:56.152Z",
+ "updatedAt": "2026-10-18T08:04:46.117Z",
+ "__v": 0,
+ "postId": "18074291591735283",
+ "account": {
+  "_id": "6a8e2fc362caae1e04063419",
+  "generatedId": "28108610098795775",
+  "userId": "6a8d2bade0b28847274e37d8",
+  "__v": 0,
+  "createdAt": "2026-08-26T00:13:55.896Z",
+  "isConnected": true,
+  "name": "UMKMNaikKelas.id",
+  "picture": "https://scontent-sin11-2.cdninstagram.com/v/t51.82787-19/504283872_17842112223530889_4877211359229981365_n.jpg?_nc_cat=108&ccb=7-5&_nc_sid=30ff31&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xNTAuQzMifQ%3D%3D&_nc_ohc=ZEA7x6dKFDEQ7kNvwHnvZiL&_nc_oc=AdqcaVKriECZYhx8PzL96CFRHsyR9F69QrWfDRcRppePulfh4esDJNhkVeLgiMITI9M&_nc_zt=24&_nc_ht=scontent-sin11-2.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=vvhcsVh6uNWKrQaduRrfkA&_nc_tpa=Q5bMBQKx0u-7N08FUTXVVQg3y2VvAH3cRG-2FRq8ekdM-MYUjMqu2N5a0WgLePxEWR_jxEhZ-qclBnBVFg&oh=00_AQOgxUmnz3sZwfOY0JGRJu46P8TUxgJVXX7pAtTy8h00zQ&oe=6ADB82C8",
+  "type": "threads",
+  "updatedAt": "2026-10-19T04:15:45.114Z",
+  "username": "umkmnaikkelas.id",
+  "id": "6a8e2fc362caae1e04063419"
+ },
+ "id": "6ad30a2c601f5a0361a6ad5b"
+}

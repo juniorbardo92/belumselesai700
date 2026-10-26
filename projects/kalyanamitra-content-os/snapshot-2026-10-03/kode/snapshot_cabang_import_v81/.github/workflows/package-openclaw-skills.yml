@@ -1,0 +1,64 @@
+name: Package OpenClaw Skills
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'integrations/openclaw/**'
+      - 'scripts/openclaw-skill-package.test.mjs'
+      - '.github/workflows/package-openclaw-skills.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate package before bundling
+        run: node scripts/openclaw-skill-package.test.mjs
+      - name: Build and verify deterministic integration bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE='umkm-openclaw-integration-v1.0.0'
+          rm -rf "$BUNDLE"
+          install -d "$BUNDLE"
+          cp -a integrations/openclaw/INSTALL.md "$BUNDLE/"
+          cp -a integrations/openclaw/manifest.json "$BUNDLE/"
+          cp -a integrations/openclaw/openclaw.config.fragment.json5 "$BUNDLE/"
+          cp -a integrations/openclaw/install-skills.sh "$BUNDLE/"
+          cp -a integrations/openclaw/skills "$BUNDLE/"
+          chmod 700 "$BUNDLE/install-skills.sh"
+          chmod 700 "$BUNDLE/skills/umkm/common/umkm-monetization.mjs"
+          find "$BUNDLE/skills" -type f -name 'SKILL.md' -exec chmod 600 {} \;
+          (
+            cd "$BUNDLE"
+            find . -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          tar --sort=name --mtime='UTC 2026-01-01' --owner=0 --group=0 --numeric-owner \
+            -czf "${BUNDLE}.tar.gz" "$BUNDLE"
+          sha256sum "${BUNDLE}.tar.gz" > "${BUNDLE}.tar.gz.sha256"
+          mkdir -p /tmp/bundle-verify
+          tar -xzf "${BUNDLE}.tar.gz" -C /tmp/bundle-verify
+          (
+            cd "/tmp/bundle-verify/$BUNDLE"
+            sha256sum -c SHA256SUMS
+          )
+      - name: Upload OpenClaw integration bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: umkm-openclaw-integration-v1.0.0-${{ github.sha }}
+          path: |
+            umkm-openclaw-integration-v1.0.0.tar.gz
+            umkm-openclaw-integration-v1.0.0.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

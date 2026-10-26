@@ -1,0 +1,186 @@
+name: External Runtime Capability Discovery
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/external-runtime-capability-discovery.request'
+      - '.github/workflows/external-runtime-capability-discovery.yml'
+
+permissions:
+  contents: write
+
+env:
+  OPENCLAW_BASE_URL_SECRET: ${{ secrets.OPENCLAW_BASE_URL }}
+  OPENCLAW_BASE_URL_VAR: ${{ vars.OPENCLAW_BASE_URL }}
+  OPENCLAW_WEBHOOK_SECRET: ${{ secrets.OPENCLAW_WEBHOOK_SECRET }}
+  HERMES_BASE_URL_SECRET: ${{ secrets.HERMES_BASE_URL }}
+  HERMES_BASE_URL_VAR: ${{ vars.HERMES_BASE_URL }}
+  HERMES_API_KEY: ${{ secrets.HERMES_API_KEY }}
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build/monetization-engine-v1
+          fetch-depth: 0
+
+      - name: Require marker
+        run: |
+          test -f activation/external-runtime-capability-discovery.request
+          grep -q '^approved=yes$' activation/external-runtime-capability-discovery.request
+
+      - name: Probe read-only capability surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENCLAW_BASE_URL="${OPENCLAW_BASE_URL_SECRET:-$OPENCLAW_BASE_URL_VAR}"
+          HERMES_BASE_URL="${HERMES_BASE_URL_SECRET:-$HERMES_BASE_URL_VAR}"
+          export OPENCLAW_BASE_URL HERMES_BASE_URL
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+
+          function normalizedBase(value) {
+            if (!value) return null;
+            try {
+              const url = new URL(value);
+              if (!['https:', 'http:'].includes(url.protocol)) return null;
+              url.hash = '';
+              return url.toString().replace(/\/$/, '');
+            } catch {
+              return null;
+            }
+          }
+
+          function curlProbe(base, path, headers = []) {
+            if (!base) return { path, status: 'NOT_CONFIGURED', contentType: null, bytes: 0 };
+            const target = path === '$base' ? base : `${base}${path}`;
+            const args = [
+              '--silent', '--show-error', '--location',
+              '--max-time', '12',
+              '--max-filesize', '262144',
+              '--output', '/tmp/discovery-body',
+              '--write-out', '%{http_code}|%{content_type}|%{size_download}',
+              ...headers.flatMap((header) => ['--header', header]),
+              target
+            ];
+            try {
+              const raw = execFileSync('curl', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+              const [status, contentType, bytes] = raw.split('|');
+              return { path, status: status || '000', contentType: contentType || null, bytes: Number(bytes || 0) };
+            } catch {
+              return { path, status: '000', contentType: null, bytes: 0 };
+            }
+          }
+
+          function extractOpenApiPaths(base, candidate, headers) {
+            if (!base) return [];
+            const target = `${base}${candidate}`;
+            const args = ['--silent', '--show-error', '--location', '--max-time', '12', '--max-filesize', '524288', ...headers.flatMap((header) => ['--header', header]), target];
+            try {
+              const raw = execFileSync('curl', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1024 * 1024 });
+              const parsed = JSON.parse(raw);
+              if (!parsed || typeof parsed !== 'object' || typeof parsed.openapi !== 'string' || !parsed.paths) return [];
+              return Object.keys(parsed.paths)
+                .filter((path) => /(health|webhook|tool|agent|telegram|run|workflow|openapi)/i.test(path))
+                .slice(0, 50);
+            } catch {
+              return [];
+            }
+          }
+
+          const openclawBase = normalizedBase(process.env.OPENCLAW_BASE_URL);
+          const hermesBase = normalizedBase(process.env.HERMES_BASE_URL);
+          const openclawSecret = process.env.OPENCLAW_WEBHOOK_SECRET || '';
+          const hermesKey = process.env.HERMES_API_KEY || '';
+
+          const openclawHeaders = openclawSecret ? [
+            `Authorization: Bearer ${openclawSecret}`,
+            `X-Webhook-Secret: ${openclawSecret}`
+          ] : [];
+          const hermesHeaders = hermesKey ? [
+            `Authorization: Bearer ${hermesKey}`,
+            `X-API-Key: ${hermesKey}`
+          ] : [];
+
+          const openclawPaths = ['$base', '/health', '/api/health', '/v1/health', '/openapi.json', '/api/openapi.json'];
+          const hermesPaths = ['$base', '/health', '/api/health', '/v1/models', '/openapi.json'];
+          const openclaw = openclawPaths.map((path) => curlProbe(openclawBase, path, openclawHeaders));
+          const hermes = hermesPaths.map((path) => curlProbe(hermesBase, path, hermesHeaders));
+
+          let discoveredPaths = [];
+          for (const candidate of ['/openapi.json', '/api/openapi.json']) {
+            discoveredPaths = extractOpenApiPaths(openclawBase, candidate, openclawHeaders);
+            if (discoveredPaths.length) break;
+          }
+
+          const reachable = (rows) => rows.some((row) => row.status !== '000' && row.status !== 'NOT_CONFIGURED');
+          const statusLabel = (status) => {
+            if (status === 'NOT_CONFIGURED') return 'NOT_CONFIGURED';
+            if (status === '000') return 'UNREACHABLE';
+            const n = Number(status);
+            if (n >= 200 && n < 400) return 'REACHABLE';
+            if (n === 401 || n === 403) return 'REACHABLE_AUTH_REQUIRED';
+            if (n === 404 || n === 405) return 'REACHABLE_PATH_UNAVAILABLE';
+            return 'REACHABLE_ERROR';
+          };
+
+          const lines = [
+            '# External Runtime Capability Discovery — Latest',
+            '',
+            `Generated: ${new Date().toISOString()}`,
+            '',
+            '> Read-only discovery. Base URLs, credentials, response bodies, prompts, and customer data are not stored.',
+            '',
+            '## OpenClaw',
+            '',
+            '| Candidate surface | HTTP | Interpretation | Content type | Bytes |',
+            '|---|---:|---|---|---:|',
+            ...openclaw.map((row) => `| ${row.path} | ${row.status} | ${statusLabel(row.status)} | ${row.contentType ?? '—'} | ${row.bytes} |`),
+            '',
+            `Runtime reachable: **${reachable(openclaw) ? 'YES' : 'NO'}**`,
+            `Sanitized OpenAPI path hints: ${discoveredPaths.length ? discoveredPaths.map((path) => `\`${path}\``).join(', ') : 'none detected'}`,
+            '',
+            '## Hermes',
+            '',
+            '| Candidate surface | HTTP | Interpretation | Content type | Bytes |',
+            '|---|---:|---|---|---:|',
+            ...hermes.map((row) => `| ${row.path} | ${row.status} | ${statusLabel(row.status)} | ${row.contentType ?? '—'} | ${row.bytes} |`),
+            '',
+            `Runtime reachable: **${reachable(hermes) ? 'YES' : 'NO'}**`,
+            '',
+            'Reachability does not prove a successful OpenClaw caller, Telegram reply, or Hermes research invocation. Those remain separate evidence gates.',
+            ''
+          ];
+
+          fs.mkdirSync('docs', { recursive: true });
+          fs.writeFileSync('docs/external-runtime-capability-discovery-latest.md', lines.join('\n'));
+          fs.writeFileSync(
+            reachable(openclaw) ? 'docs/openclaw-runtime-reachable.marker' : 'docs/openclaw-runtime-unreachable.marker',
+            `${reachable(openclaw) ? 'REACHABLE' : 'UNREACHABLE'}\n`
+          );
+          fs.writeFileSync(
+            reachable(hermes) ? 'docs/hermes-runtime-reachable.marker' : 'docs/hermes-runtime-unreachable.marker',
+            `${reachable(hermes) ? 'REACHABLE' : 'UNREACHABLE'}\n`
+          );
+          NODE
+
+          cat docs/external-runtime-capability-discovery-latest.md
+
+      - name: Commit sanitized discovery
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A docs/external-runtime-capability-discovery-latest.md docs/openclaw-runtime-*.marker docs/hermes-runtime-*.marker
+          if git diff --cached --quiet; then
+            echo 'Capability discovery unchanged.'
+            exit 0
+          fi
+          git commit -m 'Record sanitized external runtime capability discovery'
+          git push origin HEAD:build/monetization-engine-v1

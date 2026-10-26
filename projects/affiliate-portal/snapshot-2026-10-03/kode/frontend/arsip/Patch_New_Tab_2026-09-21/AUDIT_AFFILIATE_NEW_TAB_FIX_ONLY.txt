@@ -1,0 +1,19 @@
+AUDIT — AFFILIATE NEW TAB FIX ONLY
+
+Baseline:
+App_FIX_TUJUAN_3_PROFESI_ONLY.txt
+
+Perubahan:
+HANYA function AffiliateReferralBridge().
+
+Validasi:
+- Seluruh file di luar function tersebut byte-identical setelah normalisasi: LULUS
+- AffiliatePage tetap: LULUS
+- AffiliateReferralCapture tetap: LULUS
+- AffiliateSalesPage tetap: LULUS
+- Marketing Kit tetap: LULUS
+- MetaTracking tetap: LULUS
+- 3 route Program Profesi tetap: LULUS
+
+SHA256 baseline: 82ee33682916ba7377a6b69e6f7bdebeb10ad930bce25efcc0582d18cabf0f59
+SHA256 hasil   : 89d9bde49411eacecb55f7acb6549ce5d9e8a6814d033333aaa53798e6ab7dd6

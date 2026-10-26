@@ -1,0 +1,19 @@
+CARA PASANG — LANDING PAGE /affiliate RESULT-FOCUSED
+
+PALING AMAN:
+1. Backup apps/web/src/App.jsx saat ini.
+2. Buka App_AFFILIATE_RESULT_FOCUSED_ONLY.jsx.
+3. Copy seluruh isi.
+4. Horizons > Code > apps/web/src/App.jsx.
+5. Ctrl+A > paste > Save.
+6. Buka /affiliate di incognito.
+7. Uji form:
+   - isi link Lynk.id
+   - tombol Validasi tetap bekerja
+   - jangan submit data produksi jika hanya visual QA
+
+CATATAN:
+File dibuat dengan menjaga logic pendaftaran dan form byte-identical.
+Yang berubah hanya copy/presentasi AffiliatePage sebelum form.
+
+HALAMAN/FUNGSI LAIN TIDAK DIUBAH.

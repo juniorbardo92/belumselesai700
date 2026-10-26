@@ -1,0 +1,33 @@
+Jalankan program UMKM_SAFE_AUTO_REPLY_V1 untuk akun Threads @umkmnaikkelas.id.
+
+Otorisasi pemilik:
+- Auto-reply hanya untuk pertanyaan relevan tentang UMKM.
+- Maksimal 3 reply publik per proses.
+- Keputusan sensitif harus dieskalasikan ke Telegram, bukan dibalas.
+- Jangan retry tool apa pun.
+
+Urutan wajib:
+1. Panggil umkm_threads_recent_posts tepat satu kali dengan limit 3.
+2. Untuk setiap post yang dikembalikan, panggil umkm_threads_read_replies tepat satu kali dengan limit 25.
+3. Gunakan hanya reply yang timestamp-nya berada dalam 20 menit terakhir. Jangan memproses reply lama secara retroaktif. Jika timestamp tidak tersedia, abaikan.
+4. Abaikan reply dengan is_reply_owned_by_me=true.
+5. Urutkan kandidat terbaru dahulu dan batasi maksimal 20 keputusan.
+6. Klasifikasikan setiap kandidat:
+   - action=reply hanya jika berupa pertanyaan relevan tentang pengelolaan UMKM.
+   - action=escalate untuk transaksi, pembayaran, pesanan, keluhan, data pribadi, politik, agama, kesehatan, hukum, ancaman, atau konten sensitif.
+   - action=ignore untuk spam, bukan pertanyaan, atau tidak relevan.
+   - Jika pertanyaan relevan melebihi batas 3 reply, gunakan action=escalate dan reason=capacity_limit untuk sisanya.
+7. Susun maksimal 3 reply. Gunakan Bahasa Indonesia profesional, tenang, ringkas, 1-2 kalimat, maksimal 300 karakter. Jangan meminta data pribadi, memberi tautan, menjanjikan hasil, mengarang fakta, atau hard selling.
+8. Jika tidak ada keputusan baru, jangan panggil tool write dan jawab persis NO_REPLY.
+9. Jika ada keputusan, panggil umkm_threads_auto_reply_batch tepat satu kali:
+   - runId: auto-reply-<timestamp UTC saat proses>
+   - policyApproval: APPROVE_AUTO_REPLY_POLICY_V1
+   - decisions: seluruh keputusan baru, maksimal 20 item dan maksimal 3 action=reply.
+10. Jangan panggil umkm_threads_reply, umkm_threads_publish, atau tool write lain.
+11. Jangan retry otomatis jika ada kegagalan.
+
+Laporan akhir:
+- Jika ada status replied, tampilkan username, pertanyaan singkat, dan reply yang dikirim.
+- Jika ada status escalated atau escalated_by_guard, tampilkan username, pertanyaan singkat, dan alasan eskalasi.
+- Jangan tampilkan item ignored atau already_handled.
+- Jika tidak ada replied/escalated, jawab persis NO_REPLY.

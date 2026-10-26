@@ -1,0 +1,138 @@
+name: Runtime Integration Inventory
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/runtime-integration-inventory.request'
+      - '.github/workflows/runtime-integration-inventory.yml'
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+  OPENCLAW_WEBHOOK_SECRET: ${{ secrets.OPENCLAW_WEBHOOK_SECRET }}
+  OPENCLAW_BASE_URL_SECRET: ${{ secrets.OPENCLAW_BASE_URL }}
+  HERMES_API_KEY: ${{ secrets.HERMES_API_KEY }}
+  HERMES_BASE_URL_SECRET: ${{ secrets.HERMES_BASE_URL }}
+  CONTENT_OS_AUTOMATION_ENABLED_SECRET: ${{ secrets.CONTENT_OS_AUTOMATION_ENABLED }}
+  CONTENT_OS_AUTOMATION_ENABLED_VAR: ${{ vars.CONTENT_OS_AUTOMATION_ENABLED }}
+  OPENCLAW_BASE_URL_VAR: ${{ vars.OPENCLAW_BASE_URL }}
+  HERMES_BASE_URL_VAR: ${{ vars.HERMES_BASE_URL }}
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build/monetization-engine-v1
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Require marker and Cloudflare credentials
+        shell: bash
+        run: |
+          test -f activation/runtime-integration-inventory.request
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Generate presence-only integration inventory
+        shell: bash
+        run: |
+          npx wrangler secret list --config wrangler.jsonc > /tmp/content-os-secrets.json
+          npx wrangler secret list --config wrangler.monetization.jsonc > /tmp/monetization-secrets.json
+
+          node - <<'NODE'
+          const fs = require('fs');
+
+          const present = (value) => value ? 'PRESENT' : 'ABSENT';
+          const any = (...values) => present(values.some(Boolean));
+          const names = (file) => {
+            try {
+              const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+              return Array.isArray(parsed) ? parsed.map((x) => x?.name).filter(Boolean).sort() : [];
+            } catch {
+              return [];
+            }
+          };
+
+          const contentSecrets = names('/tmp/content-os-secrets.json');
+          const monetizationSecrets = names('/tmp/monetization-secrets.json');
+          const hasWorkerSecret = (list, name) => present(list.includes(name));
+
+          const rows = [
+            ['Content OS Worker: OPENCLAW_INGRESS_TOKEN', hasWorkerSecret(contentSecrets, 'OPENCLAW_INGRESS_TOKEN'), 'Identity verifier used through Service Binding'],
+            ['Monetization Worker: MONETIZATION_INGEST_TOKEN', hasWorkerSecret(monetizationSecrets, 'MONETIZATION_INGEST_TOKEN'), 'Internal API/readiness credential'],
+            ['Monetization Worker: LYNK_WEBHOOK_SECRET', hasWorkerSecret(monetizationSecrets, 'LYNK_WEBHOOK_SECRET'), 'Real Lynk callback protection'],
+            ['Monetization Worker: DEEPSEEK_API_KEY', hasWorkerSecret(monetizationSecrets, 'DEEPSEEK_API_KEY'), 'Revenue Learning'],
+            ['GitHub: OPENCLAW_BASE_URL', any(process.env.OPENCLAW_BASE_URL_SECRET, process.env.OPENCLAW_BASE_URL_VAR), 'Needed only for automation-driven external caller probes'],
+            ['GitHub: OPENCLAW_WEBHOOK_SECRET', present(process.env.OPENCLAW_WEBHOOK_SECRET), 'Optional external OpenClaw webhook contract'],
+            ['GitHub: TELEGRAM_BOT_TOKEN', present(process.env.TELEGRAM_BOT_TOKEN), 'Must be consumed by OpenClaw, never Monetization Worker'],
+            ['GitHub: TELEGRAM_WEBHOOK_SECRET', present(process.env.TELEGRAM_WEBHOOK_SECRET), 'Must be consumed by OpenClaw, never Monetization Worker'],
+            ['GitHub: HERMES_API_KEY', present(process.env.HERMES_API_KEY), 'Real Hermes invocation'],
+            ['GitHub: HERMES_BASE_URL', any(process.env.HERMES_BASE_URL_SECRET, process.env.HERMES_BASE_URL_VAR), 'Real Hermes invocation endpoint'],
+            ['GitHub: N8N_WEBHOOK_SECRET', present(process.env.N8N_WEBHOOK_SECRET), 'Existing automation compatibility only'],
+            ['Automation enabled flag', any(process.env.CONTENT_OS_AUTOMATION_ENABLED_SECRET, process.env.CONTENT_OS_AUTOMATION_ENABLED_VAR), 'Presence only; value is not disclosed']
+          ];
+
+          const requiredExternal = rows.filter(([name]) => [
+            'GitHub: OPENCLAW_BASE_URL',
+            'GitHub: TELEGRAM_BOT_TOKEN',
+            'GitHub: HERMES_API_KEY',
+            'GitHub: HERMES_BASE_URL'
+          ].includes(name));
+          const missing = requiredExternal.filter(([, status]) => status === 'ABSENT').map(([name]) => name);
+
+          const lines = [
+            '# Runtime Integration Inventory — Latest',
+            '',
+            `Generated: ${new Date().toISOString()}`,
+            '',
+            '> Presence-only report. No secret values, tokens, customer data, or private payloads are written here.',
+            '',
+            '| Integration binding | Status | Purpose |',
+            '|---|---|---|',
+            ...rows.map(([name, status, purpose]) => `| ${name} | **${status}** | ${purpose} |`),
+            '',
+            '## Release-gate interpretation',
+            '',
+            missing.length === 0
+              ? '- External runtime configuration prerequisites are present; real caller acceptance may proceed.'
+              : `- External runtime configuration still has ${missing.length} missing prerequisite(s): ${missing.join(', ')}.`,
+            '- PRESENT proves configuration presence only; it does not prove a successful external invocation.',
+            '- Telegram remains OpenClaw-only. Direct Telegram webhook on Monetization Worker stays disabled.',
+            '- Hermes and Telegram are GREEN only after authenticated runtime evidence is recorded through the external acceptance contract.',
+            ''
+          ];
+
+          fs.mkdirSync('docs', { recursive: true });
+          fs.writeFileSync('docs/runtime-integration-inventory-latest.md', lines.join('\n'));
+          NODE
+
+          cat docs/runtime-integration-inventory-latest.md
+
+      - name: Commit sanitized inventory snapshot
+        shell: bash
+        run: |
+          if git diff --quiet -- docs/runtime-integration-inventory-latest.md && git ls-files --error-unmatch docs/runtime-integration-inventory-latest.md >/dev/null 2>&1; then
+            echo 'Inventory snapshot is unchanged.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/runtime-integration-inventory-latest.md
+          git commit -m 'Record sanitized external runtime inventory'
+          git push origin HEAD:build/monetization-engine-v1

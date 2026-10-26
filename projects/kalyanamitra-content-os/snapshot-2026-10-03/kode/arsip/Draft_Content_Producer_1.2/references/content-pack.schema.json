@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ruangkalyanamitra.local/schemas/kalyanamitra-content-pack.v1.json",
+  "title": "Ruang Kalyanamitra Content Pack v1",
+  "description": "Canonical manual draft package for later Content OS or private bot import.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "package_revision",
+    "part",
+    "namespace",
+    "brand",
+    "brand_id",
+    "platform",
+    "language",
+    "timezone",
+    "content_status",
+    "publisher_mode",
+    "automatic_publish",
+    "human_approval_required",
+    "package_risk_flags",
+    "generated_at",
+    "generator",
+    "period",
+    "expected_counts",
+    "drafts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kalyanamitra-content-pack.v1"
+    },
+    "package_id": {
+      "type": "string",
+      "pattern": "^rk-[a-z0-9][a-z0-9-]{5,79}$"
+    },
+    "package_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "total", "start_date", "end_date"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1, "maximum": 31},
+        "total": {"type": "integer", "minimum": 1, "maximum": 31},
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "namespace": {"const": "ruang-kalyanamitra"},
+    "brand": {"const": "Ruang Kalyanamitra"},
+    "brand_id": {"const": "brand-ruang-kalyanamitra"},
+    "platform": {"const": "threads"},
+    "language": {"const": "id-ID"},
+    "timezone": {"const": "Asia/Jakarta"},
+    "content_status": {"const": "draft"},
+    "publisher_mode": {"const": "draft-only"},
+    "automatic_publish": {"const": false},
+    "human_approval_required": {"const": true},
+    "package_risk_flags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100},
+      "contains": {"const": "do-not-publish"},
+      "minContains": 1
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "model", "mode"],
+      "properties": {
+        "service": {
+          "type": "string",
+          "enum": ["deepseek-chat", "chatgpt", "codex", "other-manual-chat"]
+        },
+        "model": {"type": "string", "minLength": 1, "maxLength": 120},
+        "mode": {"const": "manual-chat"}
+      }
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "expected_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "days_total_package",
+        "threads_per_day",
+        "posts_min_per_thread",
+        "posts_max_per_thread",
+        "drafts_total_package",
+        "drafts_in_this_part"
+      ],
+      "properties": {
+        "days_total_package": {"type": "integer", "minimum": 1, "maximum": 366},
+        "threads_per_day": {"type": "integer", "minimum": 1, "maximum": 5},
+        "posts_min_per_thread": {"type": "integer", "minimum": 6, "maximum": 8},
+        "posts_max_per_thread": {"type": "integer", "minimum": 6, "maximum": 8},
+        "drafts_total_package": {"type": "integer", "minimum": 1, "maximum": 1830},
+        "drafts_in_this_part": {"type": "integer", "minimum": 1, "maximum": 1830}
+      }
+    },
+    "generation_notes": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "drafts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1830,
+      "items": {"$ref": "#/$defs/draft"}
+    }
+  },
+  "$defs": {
+    "tradition": {
+      "type": "string",
+      "enum": [
+        "theravada",
+        "mahayana",
+        "vajrayana",
+        "early-buddhist-texts",
+        "east-asian-buddhism",
+        "tibetan-buddhism",
+        "general-buddhist"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "provider_id",
+        "title",
+        "tradition",
+        "source_type",
+        "url",
+        "locator",
+        "claim_supported",
+        "verification_status"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^src-[a-z0-9][a-z0-9-]{2,63}$"
+        },
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 300},
+        "author_teacher_or_translator": {
+          "type": ["string", "null"],
+          "maxLength": 240
+        },
+        "tradition": {"$ref": "#/$defs/tradition"},
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "canonical-text",
+            "translation",
+            "commentary",
+            "teacher-teaching",
+            "official-lineage-guidance",
+            "secondary-orientation",
+            "user-provided"
+          ]
+        },
+        "url": {"type": "string", "format": "uri", "maxLength": 1000},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+        "claim_supported": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "verification_status": {
+          "type": "string",
+          "enum": [
+            "provider-approved-needs-item-review",
+            "needs-review",
+            "verified-by-human"
+          ]
+        },
+        "checked_at": {"type": ["string", "null"], "format": "date-time"},
+        "checked_by": {"type": ["string", "null"], "maxLength": 160}
+      }
+    },
+    "post": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "role", "text", "source_ids"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 8},
+        "role": {
+          "type": "string",
+          "enum": [
+            "hook",
+            "context",
+            "dharma-lens",
+            "explanation",
+            "application",
+            "practice",
+            "reflection",
+            "summary",
+            "source-note",
+            "cta"
+          ]
+        },
+        "text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "source_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^src-[a-z0-9][a-z0-9-]{2,63}$"}
+        }
+      }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_id",
+        "publish_date",
+        "slot",
+        "content_pillar",
+        "series",
+        "funnel_goal",
+        "audience_problem",
+        "title",
+        "promise",
+        "selected_hook",
+        "hook_rationale",
+        "tradition_scope",
+        "traditions_covered",
+        "source_review_status",
+        "sources",
+        "posts",
+        "metric_hypothesis",
+        "review_required",
+        "risk_flags"
+      ],
+      "properties": {
+        "external_id": {
+          "type": "string",
+          "pattern": "^rk-[0-9]{8}-0[1-5]$"
+        },
+        "publish_date": {"type": "string", "format": "date"},
+        "slot": {"type": "integer", "minimum": 1, "maximum": 5},
+        "content_pillar": {
+          "type": "string",
+          "enum": [
+            "Dharma untuk Kehidupan Sehari-hari",
+            "Tiga Tradisi, Satu Topik",
+            "Mitos, Istilah, dan Ketepatan Sumber",
+            "Praktik Kecil Hari Ini"
+          ]
+        },
+        "series": {"type": "string", "minLength": 1, "maxLength": 160},
+        "funnel_goal": {
+          "type": "string",
+          "enum": ["discovery", "consumption", "value", "conversion"]
+        },
+        "audience_problem": {"type": "string", "minLength": 1, "maxLength": 600},
+        "title": {"type": "string", "minLength": 1, "maxLength": 240},
+        "promise": {"type": "string", "minLength": 1, "maxLength": 600},
+        "selected_hook": {"type": "string", "minLength": 1, "maxLength": 500},
+        "hook_rationale": {"type": "string", "minLength": 1, "maxLength": 600},
+        "tradition_scope": {
+          "type": "string",
+          "enum": [
+            "theravada",
+            "mahayana",
+            "vajrayana",
+            "cross-tradition",
+            "general-buddhist"
+          ]
+        },
+        "traditions_covered": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/tradition"}
+        },
+        "source_review_status": {
+          "type": "string",
+          "enum": ["needs-review", "verified-by-human"]
+        },
+        "sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/source"}
+        },
+        "posts": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/post"}
+        },
+        "metric_hypothesis": {"type": "string", "minLength": 1, "maxLength": 600},
+        "review_required": {"const": true},
+        "risk_flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+SAFE #9 — WAITLIST TERPISAH + FOLLOW-UP 5 HARI
+
+FILE WEBSITE
+1. pages/HomePage.jsx -> HomePage_SAFE_9_WAITLIST_SEPARATE.jsx
+2. pages/WaitlistPage.jsx -> WaitlistPage_SAFE_9.jsx
+3. App.jsx -> App_SAFE_9_WAITLIST_ROUTE.jsx
+
+FILE BACKEND
+4. Code.gs -> ganti seluruh isi dengan Code_SAFE_9_WAITLIST_FOLLOWUP.gs
+5. Save -> Deploy -> Manage deployments -> Edit -> New version -> Deploy
+
+FOLLOW-UP
+- Queue sekarang dibuat SETELAH FORM WAITLIST masuk, bukan setelah download PDF.
+- Hari 0-5 memakai naskah terbaru.
+- Jendela kirim otomatis: 15.00-17.00 WIB; anchor sekitar 16.00 WIB.
+- Sheet Follow-up 5 Hari menyimpan Subjek/WA dan Pesan WA untuk copy-paste manual bila dibutuhkan.
+- installFollowUpTrigger() tetap dipakai sekali untuk membuat trigger per jam.
+
+CATATAN EMAIL
+- Karena transport Apps Script sebelumnya menghasilkan unknown error, fungsi email tetap memakai GmailApp lalu MailApp fallback.
+- Jangan anggap email otomatis live sebelum testEmailTransport() berstatus sukses.

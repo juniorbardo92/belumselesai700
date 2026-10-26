@@ -1,0 +1,123 @@
+{
+ "_id": "6ad1b9b8a38329b44d0ccd7f",
+ "title": "",
+ "description": "Jam sebelas siang, tiga pembeli berdiri menunggu kembalian. Di laci tinggal dua lembar seratus ribu - uangnya ada, tetapi tidak bisa dipakai memberi kembalian.\n\nYang dicari receh, yang tersedia lembaran besar. Pembeli pun ikut mencari uang pas.\n\nSalah satu yang bisa jadi sebabnya: modal laci pagi tidak pernah ditetapkan angkanya.",
+ "topic": "",
+ "type": "text",
+ "medias": [],
+ "meta": {
+  "title": "",
+  "description": "",
+  "url": ""
+ },
+ "status": "success",
+ "scheduleAt": "2026-10-17T08:00:00.000Z",
+ "replies": [
+  {
+   "type": "text",
+   "description": "Dua hal yang membuat pola ini terulang.\n\nPertama, modal laci diisi seadanya - apa yang tersisa kemarin. Kalau lembaran besar kemarin belum dipindahkan, pagi ini laci berisi uang besar sementara receh kosong.\n\nKedua, uang besar dibiarkan tinggal karena tidak ada angka batas dan tidak ada jam tetap untuk mengambilnya.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18399615133206780",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Mulai dari catatan lima sampai tujuh hari terakhir, bukan dari perasaan.\n\n- hari tersibuk: berapa pembeli dan berapa kali kembalian keluar\n- pecahan yang habis duluan: 2 ribu, 5 ribu, 10 ribu, 20 ribu, dan koin\n- totalnya dihitung, lalu pecahan sebanyak itu disediakan setiap pagi\n- tulis angkanya di kertas dan tempel di dalam laci\n\nAngka inilah modal laci pagi.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18081928988392441",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Uang masuk jangan langsung dijadikan satu tumpukan.\n\nSebelum buka, laci sudah berisi modal laci pagi. Semua uang yang masuk dari pembeli setelah itu adalah uang penjualan, bukan tambahan modal laci.\n\nCara memisahkannya: uang penjualan masuk ke kotak atau kantong lain di dalam laci, tidak dicampur pecahan kembalian.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18062185895561183",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Tetapkan satu batas uang tunai yang boleh tinggal di kas.\n\n- batasnya bisa dipasang dua kali modal laci pagi: cukup untuk kembalian hari ini dan besok bila setoran terlewat\n- di bawah batas: biarkan\n- lewat batas: kelebihannya diambil, masuk kantong setoran, jangan dipakai belanja dulu\n- tulis batasnya di kertas yang sama dengan modal laci, jangan diingat-ingat",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18140736262716579",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Satu jam setor, sama tiap hari.\n\n- pilih jam yang tenang: sesudah tutup atau sebelum buka\n- yang disetor isi kantong setoran, bukan pecahan yang masih dibutuhkan untuk kembalian\n- sesudah disetor, catat tanggal, jumlah, dan ke mana uangnya pergi\n- simpan buktinya: struk mesin, slip setoran, atau foto kantongnya\n\nJam tetap dipakai supaya setoran tidak bergantung pada ingatan.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18079334900383661",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Tiga hal kecil yang bisa membatalkan rencana di atas.\n\n1. Kembalian diambil dari kantong setoran karena receh habis. Pecahan kembalian tetap diambil dari modal laci pagi.\n2. Uang besar dipakai belanja stok sore hari tanpa dicatat, jadi pagi berikutnya laci kosong dan setoran tidak jalan.\n3. Hari ramai dijadikan alasan tidak setor, padahal di hari ramai kantong setoran justru cepat penuh.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "17996295243043728",
+   "errorMessage": null
+  },
+  {
+   "type": "text",
+   "description": "Pekan ini cukup tiga baris:\n1. catat penjualan 5-7 hari, pakai pecahan hari tersibuk sebagai modal laci pagi\n2. tulis satu batas uang tunai yang boleh tinggal di kas\n3. tentukan jam setor, lalu simpan bukti setorannya\n\nRefleksi: hari ramai terakhir, apakah receh di laci cukup sampai tutup atau berhenti di tengah?\n\nKalau ingin membenahi pengelolaan uang tunai ini lebih terarah, ada Paket Panglima UMKM 30 Hari (Rp349.000), pendampingan untuk pemilik usaha. Tulis \"LACI\" di komentar atau DM.",
+   "topic": "",
+   "medias": [],
+   "status": "success",
+   "postId": "18104438039571079",
+   "errorMessage": null
+  }
+ ],
+ "additionalInfo": {
+  "isAiGenerated": false,
+  "isDraft": false,
+  "isAutoAddMusic": false,
+  "isShareToFeed": false,
+  "collaborators": [],
+  "music": {
+   "id": "",
+   "artist": "",
+   "name": "",
+   "thumbnail": "",
+   "volume": {
+    "video": 50,
+    "music": 100
+   }
+  },
+  "products": [],
+  "tags": [],
+  "mentions": [],
+  "link": "",
+  "targetCountries": []
+ },
+ "accountId": "6a8e2fc362caae1e04063419",
+ "userId": "6a8d2bade0b28847274e37d8",
+ "createdAt": "2026-10-16T05:44:24.331Z",
+ "updatedAt": "2026-10-17T08:04:34.647Z",
+ "__v": 0,
+ "postId": "18399615133206780",
+ "account": {
+  "_id": "6a8e2fc362caae1e04063419",
+  "generatedId": "28108610098795775",
+  "userId": "6a8d2bade0b28847274e37d8",
+  "__v": 0,
+  "createdAt": "2026-08-26T00:13:55.896Z",
+  "isConnected": true,
+  "name": "UMKMNaikKelas.id",
+  "picture": "https://scontent-sin11-2.cdninstagram.com/v/t51.82787-19/504283872_17842112223530889_4877211359229981365_n.jpg?_nc_cat=108&ccb=7-5&_nc_sid=30ff31&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xNTAuQzMifQ%3D%3D&_nc_ohc=ZEA7x6dKFDEQ7kNvwHnvZiL&_nc_oc=AdqcaVKriECZYhx8PzL96CFRHsyR9F69QrWfDRcRppePulfh4esDJNhkVeLgiMITI9M&_nc_zt=24&_nc_ht=scontent-sin11-2.cdninstagram.com&edm=AP4hL3IEAAAA&_nc_gid=vvhcsVh6uNWKrQaduRrfkA&_nc_tpa=Q5bMBQKx0u-7N08FUTXVVQg3y2VvAH3cRG-2FRq8ekdM-MYUjMqu2N5a0WgLePxEWR_jxEhZ-qclBnBVFg&oh=00_AQOgxUmnz3sZwfOY0JGRJu46P8TUxgJVXX7pAtTy8h00zQ&oe=6ADB82C8",
+  "type": "threads",
+  "updatedAt": "2026-10-19T04:15:45.114Z",
+  "username": "umkmnaikkelas.id",
+  "id": "6a8e2fc362caae1e04063419"
+ },
+ "id": "6ad1b9b8a38329b44d0ccd7f"
+}

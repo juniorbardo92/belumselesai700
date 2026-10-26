@@ -1,0 +1,90 @@
+name: External Runtime Prerequisites Gate
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/external-runtime-prerequisites-gate.request'
+      - '.github/workflows/external-runtime-prerequisites-gate.yml'
+
+permissions:
+  contents: write
+
+env:
+  OPENCLAW_BASE_URL_SECRET: ${{ secrets.OPENCLAW_BASE_URL }}
+  OPENCLAW_BASE_URL_VAR: ${{ vars.OPENCLAW_BASE_URL }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  HERMES_API_KEY: ${{ secrets.HERMES_API_KEY }}
+  HERMES_BASE_URL_SECRET: ${{ secrets.HERMES_BASE_URL }}
+  HERMES_BASE_URL_VAR: ${{ vars.HERMES_BASE_URL }}
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build/monetization-engine-v1
+          fetch-depth: 0
+
+      - name: Require marker
+        run: |
+          test -f activation/external-runtime-prerequisites-gate.request
+          grep -q '^approved=yes$' activation/external-runtime-prerequisites-gate.request
+
+      - name: Assess presence without exposing values
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const checks = [
+            ['OPENCLAW_BASE_URL', Boolean(process.env.OPENCLAW_BASE_URL_SECRET || process.env.OPENCLAW_BASE_URL_VAR), 'Address of the existing OpenClaw runtime'],
+            ['TELEGRAM_BOT_TOKEN', Boolean(process.env.TELEGRAM_BOT_TOKEN), 'Single Telegram bot credential consumed only by OpenClaw'],
+            ['HERMES_API_KEY', Boolean(process.env.HERMES_API_KEY), 'Hermes runtime credential'],
+            ['HERMES_BASE_URL', Boolean(process.env.HERMES_BASE_URL_SECRET || process.env.HERMES_BASE_URL_VAR), 'Hermes runtime endpoint']
+          ];
+          const missing = checks.filter(([, present]) => !present).map(([name]) => name);
+          const ready = missing.length === 0;
+          const lines = [
+            '# External Runtime Prerequisites — Latest',
+            '',
+            `Generated: ${new Date().toISOString()}`,
+            '',
+            '> Presence-only assessment. No secret value is written.',
+            '',
+            '| Prerequisite | Status | Purpose |',
+            '|---|---|---|',
+            ...checks.map(([name, present, purpose]) => `| ${name} | **${present ? 'PRESENT' : 'ABSENT'}** | ${purpose} |`),
+            '',
+            `Activation readiness: **${ready ? 'READY' : 'BLOCKED'}**`,
+            '',
+            ready
+              ? 'The repository-side prerequisites are present. Real external acceptance must still be executed from OpenClaw.'
+              : `Missing prerequisite names: ${missing.join(', ')}`,
+            ''
+          ];
+          fs.mkdirSync('docs', { recursive: true });
+          fs.writeFileSync('docs/external-runtime-prerequisites-latest.md', lines.join('\n'));
+          fs.writeFileSync(
+            ready ? 'docs/external-runtime-prerequisites-ready.marker' : 'docs/external-runtime-prerequisites-blocked.marker',
+            `${ready ? 'READY' : 'BLOCKED'}\n`
+          );
+          const stale = ready ? 'docs/external-runtime-prerequisites-blocked.marker' : 'docs/external-runtime-prerequisites-ready.marker';
+          if (fs.existsSync(stale)) fs.rmSync(stale);
+          NODE
+
+          cat docs/external-runtime-prerequisites-latest.md
+
+      - name: Commit sanitized assessment
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/external-runtime-prerequisites-latest.md docs/external-runtime-prerequisites-*.marker
+          if git diff --cached --quiet; then
+            echo 'Prerequisite assessment unchanged.'
+            exit 0
+          fi
+          git commit -m 'Record external runtime prerequisite gate'
+          git push origin HEAD:build/monetization-engine-v1

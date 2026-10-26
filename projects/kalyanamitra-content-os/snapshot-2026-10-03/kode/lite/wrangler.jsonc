@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kalyanamitra-lite",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-26",
+  "workers_dev": true,
+  "ai": {
+    "binding": "AI"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kalyanamitra-lite-db",
+      "database_id": "REPLACE_RESOURCE_ID"
+    }
+  ],
+  "vars": {
+    "AI_MODEL": "@cf/zai-org/glm-4.7-flash"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

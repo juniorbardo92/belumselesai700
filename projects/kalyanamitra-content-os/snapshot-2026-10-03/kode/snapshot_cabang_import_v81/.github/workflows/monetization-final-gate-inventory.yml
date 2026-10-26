@@ -1,0 +1,150 @@
+name: Monetization Final Gate Inventory
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-final-gate-inventory.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run final source and regression gate
+        run: |
+          npm run types
+          npm run check:all
+      - name: Require read-only inventory marker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          marker='activation/monetization-final-gate-inventory.request'
+          test "$(wc -l < "$marker" | tr -d ' ')" = '4'
+          grep -Fxq 'approved=yes' "$marker"
+          grep -Fxq 'mode=read-only-no-business-row-write' "$marker"
+          grep -Fxq 'confirmation=AUDIT_REMAINING_REAL_GATES' "$marker"
+          grep -Fxq 'attempt=2' "$marker"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          mkdir -p "$RUNNER_TEMP/wrangler-empty"
+          echo "WRANGLER_EMPTY_CWD=$RUNNER_TEMP/wrangler-empty" >> "$GITHUB_ENV"
+      - name: Capture exact deployed Content OS dashboard
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os > content-os-deployment.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('content-os-deployment.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!=='2b923aeb-883e-4587-826f-ebe2cf8cf918'||pct!==100) throw new Error(`Content OS dashboard mismatch ${id}@${pct}`);
+          NODE
+      - name: Capture exact restored deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-monetization-engine > deployment.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('deployment.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!=='ec19dcb0-3c61-4b48-a0c1-e9f28cec4397'||pct!==100) throw new Error(`v14 restore mismatch ${id}@${pct}`);
+          NODE
+      - name: Query privacy-bounded production evidence
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          cfg='wrangler.monetization.candidate.jsonc'
+          d1='npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config'
+          $d1 "$cfg" --command="SELECT name FROM d1_migrations WHERE name IN ('0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql') ORDER BY name;" > migrations.json
+          $d1 "$cfg" --command="SELECT r.id,r.transaction_id,r.gross_amount,r.net_amount,r.margin_amount,r.status,r.content_item_id,r.campaign_id,r.offer_id,a.model,a.attribution_status,a.first_event_id,a.last_event_id FROM monetization_revenue_events r LEFT JOIN monetization_attributions a ON a.revenue_event_id=r.id WHERE r.id='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f';" > lynk-chain.json
+          $d1 "$cfg" --command="SELECT source,status,transaction_count_delta,gross_amount_delta,created_at FROM monetization_reconciliation_runs WHERE source='lynk' ORDER BY datetime(created_at) DESC LIMIT 1;" > lynk-reconciliation.json
+          $d1 "$cfg" --command="SELECT COUNT(*) AS telemetry_count,MAX(datetime(occurred_at)) AS latest_at,COUNT(DISTINCT json_extract(metadata_json,'$.appVersion')) AS app_version_count FROM monetization_events WHERE brand_id='brand-umkm-naik-kelas' AND event_type='app_install' AND source='apk' AND platform='app';" > apk-telemetry.json
+          $d1 "$cfg" --command="SELECT COUNT(*) AS website_origin_count,MAX(datetime(created_at)) AS latest_at FROM monetization_integration_logs WHERE provider='tracking' AND operation='tracked_origin' AND json_extract(metadata_json,'$.detectedOrigin')='website' AND json_extract(metadata_json,'$.piiStored')=0;" > website-origin.json
+          $d1 "$cfg" --command="SELECT COUNT(*) AS candidate_count FROM monetization_revenue_events r JOIN monetization_record_quality q ON q.record_type='revenue_event' AND q.record_id=r.id AND q.data_class='production' AND q.verification_status='verified' WHERE r.status='confirmed' AND r.source<>'lynk' AND EXISTS (SELECT 1 FROM monetization_provider_mappings p WHERE p.brand_id=r.brand_id AND p.provider<>'lynk' AND p.offer_id=r.offer_id) AND EXISTS (SELECT 1 FROM monetization_reconciliation_runs rr WHERE rr.brand_id=r.brand_id AND rr.source=r.source AND rr.status='matched' AND rr.transaction_count_delta=0 AND rr.gross_amount_delta=0);" > external-affiliate.json
+      - name: Classify evidence without overstating external gates
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const rows=f=>JSON.parse(fs.readFileSync(f,'utf8'))?.[0]?.results??[];
+          const migrations=rows('migrations.json').map(x=>x.name);
+          const expected=['0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql'];
+          if(JSON.stringify(migrations)!==JSON.stringify(expected)) throw new Error(`migration evidence mismatch: ${migrations}`);
+          const chain=rows('lynk-chain.json')[0];
+          const chainGreen=chain?.gross_amount===5000&&chain?.status==='confirmed'&&chain?.attribution_status==='attributed'&&chain?.model==='last_touch'&&chain?.first_event_id===chain?.last_event_id;
+          if(!chainGreen) throw new Error(`real Lynk chain regression: ${JSON.stringify(chain)}`);
+          const rec=rows('lynk-reconciliation.json')[0];
+          const reconciliationGreen=rec?.status==='matched'&&Number(rec?.transaction_count_delta)===0&&Number(rec?.gross_amount_delta)===0;
+          if(!reconciliationGreen) throw new Error(`Lynk reconciliation regression: ${JSON.stringify(rec)}`);
+          const apk=rows('apk-telemetry.json')[0]??{};
+          const website=rows('website-origin.json')[0]??{};
+          const external=rows('external-affiliate.json')[0]??{};
+          const report={
+            generatedAt:new Date().toISOString(),mode:'read-only',
+            schema:{status:'GREEN',migrations},
+            lynkRealChain:{status:'GREEN',revenueEventId:chain.id,grossAmount:chain.gross_amount,attributionStatus:chain.attribution_status,model:chain.model},
+            lynkReconciliation:{status:'GREEN',transactionCountDelta:rec.transaction_count_delta,grossAmountDelta:rec.gross_amount_delta,createdAt:rec.created_at},
+            realApkClient:{status:'YELLOW',telemetryRows:Number(apk.telemetry_count??0),latestAt:apk.latest_at??null,reason:'D1 telemetry alone is not device install or attestation evidence.'},
+            productionWebsiteCta:{status:Number(website.website_origin_count??0)>0?'YELLOW':'YELLOW',websiteOriginRows:Number(website.website_origin_count??0),latestAt:website.latest_at??null,reason:'Origin telemetry alone does not prove CTA placement on the production website.'},
+            realExternalAffiliateProvider:{status:Number(external.candidate_count??0)>0?'YELLOW':'YELLOW',reconciledCandidateRows:Number(external.candidate_count??0),reason:'Automated correlation is inventory only; provider-native transaction evidence still requires explicit acceptance.'}
+          };
+          fs.writeFileSync('final-gate-inventory.json',JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          NODE
+      - name: Verify Cloudflare Access remains fail-closed
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --output dashboard-body.txt --dump-header dashboard-headers.txt --write-out '%{http_code}' 'https://umkm-content-os.ruang-belajar-mandiri01.workers.dev/monetization' || true)
+          if [ "$code" = '302' ] || [ "$code" = '303' ]; then
+            grep -Eiq '^location: .*cloudflareaccess\.com' dashboard-headers.txt
+          else
+            test "$code" = '401' -o "$code" = '403'
+          fi
+          printf '{"status":%s,"authenticatedRenderProven":false}\n' "$code" > access-edge.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monetization-final-gate-inventory
+          path: |
+            deployment.json
+            content-os-deployment.json
+            migrations.json
+            lynk-chain.json
+            lynk-reconciliation.json
+            apk-telemetry.json
+            website-origin.json
+            external-affiliate.json
+            final-gate-inventory.json
+            dashboard-headers.txt
+            access-edge.json
+          if-no-files-found: warn
+          retention-days: 14

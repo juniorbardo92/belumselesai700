@@ -1,0 +1,244 @@
+{
+  "generated_at": "2026-09-21T11:20:24.055Z",
+  "status": "PASS",
+  "totals": {
+    "threads": 800,
+    "posts": 7200,
+    "pilot_threads_preserved": 100,
+    "rewritten_threads": 700,
+    "visuals": 160
+  },
+  "check_count": 46,
+  "checks": [
+    {
+      "name": "Workbook calendar rows",
+      "status": "PASS",
+      "detail": "800/800"
+    },
+    {
+      "name": "Workbook thread rows",
+      "status": "PASS",
+      "detail": "7200/7200"
+    },
+    {
+      "name": "Workbook payload rows",
+      "status": "PASS",
+      "detail": "7200/7200"
+    },
+    {
+      "name": "Workbook visual rows",
+      "status": "PASS",
+      "detail": "160/160"
+    },
+    {
+      "name": "Calendar pilot status",
+      "status": "PASS",
+      "detail": "{\"PILOT_QA_LOLOS_MANUAL_MAPPING_REQUIRED\":100,\"REWRITE_QA_LOLOS_MANUAL_MAPPING_REQUIRED\":700}"
+    },
+    {
+      "name": "Calendar rewrite status",
+      "status": "PASS",
+      "detail": "{\"PILOT_QA_LOLOS_MANUAL_MAPPING_REQUIRED\":100,\"REWRITE_QA_LOLOS_MANUAL_MAPPING_REQUIRED\":700}"
+    },
+    {
+      "name": "Niche balance",
+      "status": "PASS",
+      "detail": "{\"UMKM\":200,\"Agen Asuransi\":200,\"Agen Properti\":200,\"MLM/Direct Selling\":200}"
+    },
+    {
+      "name": "Soft-selling balance",
+      "status": "PASS",
+      "detail": "120/800"
+    },
+    {
+      "name": "Visual balance",
+      "status": "PASS",
+      "detail": "160/800"
+    },
+    {
+      "name": "Pilot Calendar unchanged",
+      "status": "PASS",
+      "detail": "100/100 rows exact"
+    },
+    {
+      "name": "Backlog stable metadata",
+      "status": "PASS",
+      "detail": "20 preserved fields across 700 rows"
+    },
+    {
+      "name": "Visual Ledger unchanged",
+      "status": "PASS",
+      "detail": "all cells exact"
+    },
+    {
+      "name": "Sources unchanged",
+      "status": "PASS",
+      "detail": "all cells exact"
+    },
+    {
+      "name": "JSON records",
+      "status": "PASS",
+      "detail": "7200/7200"
+    },
+    {
+      "name": "Payload scope",
+      "status": "PASS",
+      "detail": "{\"pilot_threads_preserved\":100,\"rewritten_remaining_threads\":700,\"editorial_qa_passed_threads\":800,\"total_threads\":800,\"total_posts\":7200}"
+    },
+    {
+      "name": "Unique JSON record keys",
+      "status": "PASS",
+      "detail": "7200/7200"
+    },
+    {
+      "name": "Content hashes",
+      "status": "PASS",
+      "detail": "0 failure"
+    },
+    {
+      "name": "Idempotency keys",
+      "status": "PASS",
+      "detail": "0 failure"
+    },
+    {
+      "name": "Thread groups",
+      "status": "PASS",
+      "detail": "800/800"
+    },
+    {
+      "name": "Post distribution",
+      "status": "PASS",
+      "detail": "{\"8\":267,\"9\":266,\"10\":267}"
+    },
+    {
+      "name": "All post content unique",
+      "status": "PASS",
+      "detail": "7200/7200"
+    },
+    {
+      "name": "Post length",
+      "status": "PASS",
+      "detail": "max 340"
+    },
+    {
+      "name": "One question per thread",
+      "status": "PASS",
+      "detail": "800/800"
+    },
+    {
+      "name": "Unique openers",
+      "status": "PASS",
+      "detail": "800/800"
+    },
+    {
+      "name": "Pilot record objects unchanged",
+      "status": "PASS",
+      "detail": "899/899 records exact"
+    },
+    {
+      "name": "Pilot signature",
+      "status": "PASS",
+      "detail": "973386624f5c97241e7b36d734f01fd287c2bc6ca593e0eebd310f5fc95fbfa1"
+    },
+    {
+      "name": "Product CTA routes",
+      "status": "PASS",
+      "detail": "approved route on every PRODUCT record"
+    },
+    {
+      "name": "No Lynk URLs",
+      "status": "PASS",
+      "detail": "0 Lynk"
+    },
+    {
+      "name": "URL placement in content",
+      "status": "PASS",
+      "detail": "links only on final PRODUCT posts"
+    },
+    {
+      "name": "Media count",
+      "status": "PASS",
+      "detail": "160/160"
+    },
+    {
+      "name": "Media only opener",
+      "status": "PASS",
+      "detail": "160/160 sequence 1"
+    },
+    {
+      "name": "Reply parent",
+      "status": "PASS",
+      "detail": "all replies parent_seq 1"
+    },
+    {
+      "name": "Threads workbook/JSON parity",
+      "status": "PASS",
+      "detail": "7.200/7.200 aligned"
+    },
+    {
+      "name": "Payload workbook/JSON parity",
+      "status": "PASS",
+      "detail": "7.200/7.200 aligned"
+    },
+    {
+      "name": "Visual file count",
+      "status": "PASS",
+      "detail": "160/160"
+    },
+    {
+      "name": "Visual file names unchanged",
+      "status": "PASS",
+      "detail": "160 names exact"
+    },
+    {
+      "name": "Visual bytes unchanged",
+      "status": "PASS",
+      "detail": "160/160 exact"
+    },
+    {
+      "name": "Visual ledger hashes",
+      "status": "PASS",
+      "detail": "160/160"
+    },
+    {
+      "name": "Visual_Manifest_160_PNG.csv unchanged",
+      "status": "PASS",
+      "detail": "byte exact"
+    },
+    {
+      "name": "VISUAL_FOOTER_QA.json unchanged",
+      "status": "PASS",
+      "detail": "byte exact"
+    },
+    {
+      "name": "PILOT_100_QA.json unchanged",
+      "status": "PASS",
+      "detail": "byte exact"
+    },
+    {
+      "name": "Formula error scan",
+      "status": "PASS",
+      "detail": "{\"#REF!\":0,\"#DIV/0!\":0,\"#VALUE!\":0,\"#NAME?\":0,\"#N/A\":0,\"#NUM!\":0,\"#NULL!\":0,\"#SPILL!\":0,\"#CALC!\":0}"
+    },
+    {
+      "name": "Content QA snapshot",
+      "status": "PASS",
+      "detail": "PASS; 7200 posts"
+    },
+    {
+      "name": "Required package files",
+      "status": "PASS",
+      "detail": "UMKM_Content_OS_800_Utas_REWRITTEN_ALL_2026-10-13_2026-12-31.xlsx, UMKM_Repliz_Manual_800_Utas_7200_Post.json, Visual_Manifest_160_PNG.csv, AUDIT_FINAL_800_UTAS.md, FULL_800_QA.json, PILOT_100_QA.json, VISUAL_FOOTER_QA.json, README.md"
+    },
+    {
+      "name": "Old package files removed",
+      "status": "PASS",
+      "detail": "no stale pilot-only artifacts"
+    },
+    {
+      "name": "No temporary inspect sidecar",
+      "status": "PASS",
+      "detail": "package clean"
+    }
+  ]
+}

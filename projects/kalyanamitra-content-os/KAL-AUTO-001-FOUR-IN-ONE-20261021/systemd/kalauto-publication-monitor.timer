@@ -1,0 +1,12 @@
+[Unit]
+Description=KAL-AUTO-001 publication proof + Telegram alerts
+
+[Timer]
+OnBootSec=70s
+OnUnitInactiveSec=120s
+AccuracySec=15s
+Persistent=false
+Unit=kalauto-publication-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,128 @@
+name: Monetization v9 Runtime Status
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-v9-runtime-status.request'
+      - '.github/workflows/monetization-v9-runtime-status.yml'
+      - 'src/monetization-worker-v9.ts'
+      - 'wrangler.monetization.jsonc'
+
+permissions:
+  contents: write
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build/monetization-engine-v1
+          fetch-depth: 0
+
+      - name: Require marker and credential
+        shell: bash
+        run: |
+          test -f activation/monetization-v9-runtime-status.request
+          grep -q '^approved=yes$' activation/monetization-v9-runtime-status.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+
+      - name: Wait for production v9 status surface
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          for attempt in $(seq 1 36); do
+            code=$(curl --silent --show-error --output /tmp/external-status.json --write-out '%{http_code}' \
+              -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+              "$BASE/api/monetization/external-acceptance/status" || true)
+            if [ "$code" = '200' ]; then exit 0; fi
+            sleep 5
+          done
+          echo 'Worker v9 did not expose the protected status endpoint.'
+          exit 1
+
+      - name: Collect sanitized runtime checks
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          GO='https://go.umkmnaikkelas.id'
+
+          public_status=$(curl --silent --show-error --output /tmp/public.json --write-out '%{http_code}' "$BASE/api/monetization/status")
+          go_status=$(curl --silent --show-error --output /tmp/go.json --write-out '%{http_code}' "$GO/api/monetization/status")
+          protected_status=$(curl --silent --show-error --output /tmp/protected.json --write-out '%{http_code}' "$BASE/api/monetization/external-acceptance/status")
+          telegram_status=$(curl --silent --show-error --output /tmp/telegram.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"update_id":1,"message":{"chat":{"id":1},"text":"/revenue"}}' \
+            "$BASE/api/monetization/telegram/webhook")
+          authorized_status=$(curl --silent --show-error --output /tmp/external-status.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/external-acceptance/status")
+
+          export PUBLIC_STATUS="$public_status"
+          export GO_STATUS="$go_status"
+          export PROTECTED_STATUS="$protected_status"
+          export TELEGRAM_STATUS="$telegram_status"
+          export AUTHORIZED_STATUS="$authorized_status"
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const external = JSON.parse(fs.readFileSync('/tmp/external-status.json', 'utf8'));
+          const gates = external.gates ?? {};
+          const yes = (v) => v === true ? 'GREEN' : 'YELLOW';
+          const lines = [
+            '# Monetization Worker v9 — Latest Runtime Status',
+            '',
+            `Generated: ${new Date().toISOString()}`,
+            '',
+            '> Sanitized snapshot. No token, customer PII, chat ID, prompt, or provider payload is stored.',
+            '',
+            '| Check | Expected | Actual | Status |',
+            '|---|---:|---:|---|',
+            `| Monetization public health | 200 | ${process.env.PUBLIC_STATUS} | ${process.env.PUBLIC_STATUS === '200' ? 'GREEN' : 'RED'} |`,
+            `| First-party go domain health | 200 | ${process.env.GO_STATUS} | ${process.env.GO_STATUS === '200' ? 'GREEN' : 'RED'} |`,
+            `| External acceptance status without token | 401 | ${process.env.PROTECTED_STATUS} | ${process.env.PROTECTED_STATUS === '401' ? 'GREEN' : 'RED'} |`,
+            `| Direct Telegram webhook | 410 | ${process.env.TELEGRAM_STATUS} | ${process.env.TELEGRAM_STATUS === '410' ? 'GREEN' : 'RED'} |`,
+            `| External acceptance status with operator token | 200 | ${process.env.AUTHORIZED_STATUS} | ${process.env.AUTHORIZED_STATUS === '200' ? 'GREEN' : 'RED'} |`,
+            '',
+            '## Real external-runtime evidence',
+            '',
+            '| Gate | Status |',
+            '|---|---|',
+            `| Real OpenClaw caller | ${yes(gates.runtime)} |`,
+            `| Telegram → OpenClaw → Monetization → Telegram | ${yes(gates.telegram)} |`,
+            `| OpenClaw → Hermes → accepted research result | ${yes(gates.hermes)} |`,
+            '',
+            `All external runtime gates green: **${external.allExternalRuntimeGreen === true ? 'YES' : 'NO'}**`,
+            '',
+            'YELLOW is expected until evidence is submitted by the actual authenticated external runtime. This workflow never creates external evidence.',
+            ''
+          ];
+          fs.mkdirSync('docs', { recursive: true });
+          fs.writeFileSync('docs/monetization-v9-runtime-status-latest.md', lines.join('\n'));
+          NODE
+
+          cat docs/monetization-v9-runtime-status-latest.md
+
+          test "$public_status" = '200'
+          test "$go_status" = '200'
+          test "$protected_status" = '401'
+          test "$telegram_status" = '410'
+          test "$authorized_status" = '200'
+
+      - name: Commit sanitized runtime snapshot
+        shell: bash
+        run: |
+          if git diff --quiet -- docs/monetization-v9-runtime-status-latest.md && git ls-files --error-unmatch docs/monetization-v9-runtime-status-latest.md >/dev/null 2>&1; then
+            echo 'Runtime snapshot is unchanged.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/monetization-v9-runtime-status-latest.md
+          git commit -m 'Record sanitized Monetization v9 runtime status'
+          git push origin HEAD:build/monetization-engine-v1

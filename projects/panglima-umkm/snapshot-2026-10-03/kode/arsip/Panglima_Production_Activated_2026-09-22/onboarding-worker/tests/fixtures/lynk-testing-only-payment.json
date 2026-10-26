@@ -1,0 +1,50 @@
+{
+  "event": "payment.received",
+  "data": {
+    "message_action": "SUCCESS",
+    "message_code": "0",
+    "message_data": {
+      "createdAt": "2026-09-17T11:40:41",
+      "customer": {
+        "email": "testing-only@example.com",
+        "name": "Testing Only",
+        "phone": "080000000000"
+      },
+      "items": [
+        {
+          "addons": [],
+          "appointment_data": {},
+          "fk_ticket_id": "",
+          "pafId": "",
+          "price": 7000,
+          "public_affiliate_content": {},
+          "qty": 1,
+          "questions": "{}",
+          "stock": "unlimited",
+          "ticket_data": {},
+          "title": "Testing Only",
+          "uuid": "6aab26a97759780e1113e5b6-5925-2782841211-1789601449730"
+        }
+      ],
+      "refId": "7e65afdbfae16dae880b61d5ef3db654",
+      "shippingAddress": "[disamarkan]",
+      "shippingInfo": "REGULAR",
+      "totals": {
+        "affiliate": 0,
+        "convenienceFee": 0,
+        "customerPay": 14098,
+        "discount": 0,
+        "grandTotal": 14000,
+        "totalAddon": 0,
+        "totalItem": 1,
+        "totalPrice": 7000,
+        "totalShipping": 7000
+      },
+      "voucherCode": "",
+      "voucherQuantity": ""
+    },
+    "message_desc": "",
+    "message_id": "API_CALL_TESTING_ONLY_FIXTURE",
+    "message_title": ""
+  }
+}

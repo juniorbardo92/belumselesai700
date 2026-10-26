@@ -1,0 +1,72 @@
+name: Monetization OpenClaw Bridge Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-openclaw-bridge-acceptance.request'
+      - '.github/workflows/monetization-openclaw-bridge-acceptance.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require acceptance marker
+        shell: bash
+        run: |
+          test -f activation/monetization-openclaw-bridge-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-openclaw-bridge-acceptance.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Verify Content OS OpenClaw ingress secret is installed
+        shell: bash
+        run: |
+          npx wrangler secret list --config wrangler.jsonc > /tmp/secrets.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('/tmp/secrets.json','utf8'));
+          const names=(Array.isArray(x)?x:[]).map(v=>v.name);
+          if(!names.includes('OPENCLAW_INGRESS_TOKEN')) process.exit(1);
+          console.log('OPENCLAW_INGRESS_TOKEN=installed');
+          NODE
+      - name: Verify Monetization to Content OS service binding and feedback surfaces
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/runtime.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/openclaw/runtime")
+          cat /tmp/runtime.json
+          test "$code" = '200'
+          grep -q '"serviceBinding":true' /tmp/runtime.json
+          grep -q '"openClawVerifier":"configured-on-content-os"' /tmp/runtime.json
+          grep -q '"revenueCommand":"ready"' /tmp/runtime.json
+          grep -q '"revenueLearningContext":"ready"' /tmp/runtime.json
+      - name: Verify OpenClaw command and context endpoints are fail-closed
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          command_code=$(curl --silent --show-error --output /tmp/unauth-command.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"query":"revenue","days":30}' \
+            "$BASE/api/monetization/openclaw/command")
+          context_code=$(curl --silent --show-error --output /tmp/unauth-context.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/context")
+          cat /tmp/unauth-command.json
+          cat /tmp/unauth-context.json
+          test "$command_code" = '401'
+          test "$context_code" = '401'

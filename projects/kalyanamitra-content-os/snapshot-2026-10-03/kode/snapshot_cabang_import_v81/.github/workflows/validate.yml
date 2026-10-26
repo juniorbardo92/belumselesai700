@@ -1,0 +1,54 @@
+name: Validate Content OS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run types
+      - run: npm run check
+      - run: npm run test:monetization:v15
+      - run: node --check renderer/render.mjs
+      - run: node --test renderer/brand-profile.test.mjs
+      - name: Bundle Content OS importer test target
+        run: npx esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/index.js
+      - name: Test Kalyanamitra content-pack importer
+        run: node --test test/content-pack-import.test.mjs
+      - run: npm run build
+      - run: npm run build:monetization
+      - run: npm run build:monetization:candidate
+      - name: Save deployable Content OS Worker bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+      - name: Save deployable Monetization Engine Worker bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: monetization-worker-bundle
+          path: dist-monetization
+          if-no-files-found: error
+          retention-days: 1
+      - name: Save reproducible Monetization v15 candidate bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: monetization-worker-candidate-bundle
+          path: dist-monetization-candidate
+          if-no-files-found: error
+          retention-days: 1

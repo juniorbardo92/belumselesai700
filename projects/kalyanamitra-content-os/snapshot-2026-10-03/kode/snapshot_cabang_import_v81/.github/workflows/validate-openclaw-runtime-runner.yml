@@ -1,0 +1,41 @@
+name: Validate OpenClaw Runtime Runner
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'scripts/openclaw-runtime-acceptance.mjs'
+      - 'docs/openclaw-runtime-acceptance-runner.md'
+      - '.github/workflows/validate-openclaw-runtime-runner.yml'
+  pull_request:
+    paths:
+      - 'scripts/openclaw-runtime-acceptance.mjs'
+      - 'docs/openclaw-runtime-acceptance-runner.md'
+      - '.github/workflows/validate-openclaw-runtime-runner.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check scripts/openclaw-runtime-acceptance.mjs
+      - name: Verify runner does not embed secrets or customer PII
+        shell: bash
+        run: |
+          ! grep -E 'Bearer[[:space:]]+[A-Za-z0-9_-]{24,}|bot[0-9]{6,}:[A-Za-z0-9_-]{20,}|varashoil108@gmail\.com|jetnusa' scripts/openclaw-runtime-acceptance.mjs
+      - name: Verify real-runtime guardrails
+        shell: bash
+        run: |
+          grep -q 'OPENCLAW_INGRESS_TOKEN' scripts/openclaw-runtime-acceptance.mjs
+          grep -q 'OPENCLAW_RUN_ID' scripts/openclaw-runtime-acceptance.mjs
+          grep -q 'submitExternalAcceptanceEvidence\|openclaw/acceptance' scripts/openclaw-runtime-acceptance.mjs
+          grep -q 'deliveryStatus' scripts/openclaw-runtime-acceptance.mjs
+          grep -q 'SHA-256\|sha256' docs/openclaw-runtime-acceptance-runner.md

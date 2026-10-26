@@ -1,0 +1,42 @@
+Panglima Affiliate Admin - Phase 2J SAFE
+
+BASELINE
+- Base DEX/class: Phase 2G STBL (device-proven)
+- Package: id.umkmnaikkelas.panglimaadmin.safe2j
+- Activity: id.umkmnaikkelas.panglimaadmin.safe2g.MainActivity
+- versionCode: 11
+- Exact DEX HTML padding: 33 bytes
+
+2J COMMISSION & PAYOUT MONITORING
+- Commission Monitor: PRESENT
+- Commission search: affiliate / code / transaction
+- Local summary: Earned / Outstanding / Paid / Transaction count
+- Filters: ALL / PENDING / APPROVED / PAID
+- Affiliate performance funnel from 2I: RETAINED
+- History search/date filters from 2H: RETAINED
+- Source: admin_dashboard snapshot only
+- Commission write endpoint: NONE
+- New endpoint/schema: NONE
+
+LOGO
+- User supplied logo used as launcher icon
+- 512x512 PNG SHA-256: 1ccddfcd8ce6c487c9bf7172385f97d2a8f226e5d649bf498d7a20888de78c16
+
+SECURITY
+- Backend / Worker / GAS / DB / webhook modified: NO
+- Allowed actions unchanged: 4
+- Write: APPROVED ONLY
+- REJECTED: ABSENT
+- SUSPENDED: ABSENT
+- Commission update: ABSENT
+- Resend email: ABSENT
+- Persistent app storage: NONE / RAM only
+
+INTEGRITY
+- ZIP CRC: VERIFIED
+- DEX SHA-1: VERIFIED
+- DEX Adler32: VERIFIED
+- DEX string-data layout: CONTIGUOUS
+- APK Signature v2: VERIFIED
+- Signing certificate SHA-256: f24d5087033ee672c867039a40f53bdefe1bece5e5e95b2da44e7da218a5f5ab
+- APK SHA-256: b565a5a21d43f3178f214c05207907392c907e652b5c4622be5b5b235f4e0770

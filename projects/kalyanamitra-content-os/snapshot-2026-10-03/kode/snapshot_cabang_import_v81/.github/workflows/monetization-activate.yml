@@ -1,0 +1,114 @@
+name: Monetization Production Activation
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-activate.request'
+      - '.github/workflows/monetization-activate.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+  CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+  CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require explicit activation marker
+        shell: bash
+        run: |
+          test -f activation/monetization-activate.request
+          grep -q '^release=monetization-engine-final-v1.0$' activation/monetization-activate.request
+          grep -q '^approved=yes$' activation/monetization-activate.request
+          grep -q '^policy=additive-only$' activation/monetization-activate.request
+      - name: Verify Cloudflare credentials and mandatory runtime/access secrets
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$MONETIZATION_INGEST_TOKEN"
+          test -n "$DEEPSEEK_API_KEY"
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
+      - name: Verify Cloudflare access
+        run: npx wrangler whoami
+      - name: Export D1 backup immediately before migration
+        run: |
+          mkdir -p backup
+          npx wrangler d1 export umkm-content-os-db --remote --output=backup/umkm-content-os-before-monetization-activation.sql
+      - name: Save activation backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: umkm-content-os-before-monetization-activation
+          path: backup/umkm-content-os-before-monetization-activation.sql
+          if-no-files-found: error
+          retention-days: 14
+      - name: Apply additive D1 migrations
+        run: npx wrangler d1 migrations apply umkm-content-os-db --remote --config wrangler.monetization.jsonc
+      - name: Verify existing tables still readable
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --command="SELECT COUNT(*) AS brands FROM brands; SELECT COUNT(*) AS topics FROM topics; SELECT COUNT(*) AS content_items FROM content_items;" --config wrangler.monetization.jsonc
+      - name: Verify monetization tables exist
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --command="SELECT COUNT(*) AS offers FROM monetization_offers; SELECT COUNT(*) AS events FROM monetization_events; SELECT COUNT(*) AS revenue_events FROM monetization_revenue_events;" --config wrangler.monetization.jsonc
+      - name: Install mandatory Monetization Worker secrets
+        shell: bash
+        run: |
+          printf '%s' "$MONETIZATION_INGEST_TOKEN" | npx wrangler secret put MONETIZATION_INGEST_TOKEN --config wrangler.monetization.jsonc
+          printf '%s' "$DEEPSEEK_API_KEY" | npx wrangler secret put DEEPSEEK_API_KEY --config wrangler.monetization.jsonc
+      - name: Deploy isolated Monetization Engine Worker
+        run: npx wrangler deploy --config wrangler.monetization.jsonc
+      - name: Acceptance - Worker health with propagation retry
+        shell: bash
+        run: |
+          BASE_URL="https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev"
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code=$(curl --silent --output /tmp/status.json --write-out '%{http_code}' "$BASE_URL/api/monetization/status" || true)
+            if [ "$code" = "200" ] && grep -q '"ok":true' /tmp/status.json; then
+              ok=1
+              break
+            fi
+            echo "Worker health attempt $attempt returned HTTP $code; retrying..."
+            sleep 3
+          done
+          cat /tmp/status.json || true
+          test "$ok" = "1"
+      - name: Acceptance - Sensitive API requires bearer token
+        shell: bash
+        run: |
+          BASE_URL="https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev"
+          unauthorized=$(curl --silent --output /tmp/unauth.json --write-out '%{http_code}' "$BASE_URL/api/monetization/summary?days=30" || true)
+          cat /tmp/unauth.json || true
+          test "$unauthorized" = "401"
+          authorized=$(curl --silent --output /tmp/auth.json --write-out '%{http_code}' -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" "$BASE_URL/api/monetization/summary?days=30" || true)
+          cat /tmp/auth.json || true
+          test "$authorized" = "200"
+          grep -q '"ok":true' /tmp/auth.json
+      - name: Acceptance - Existing Content OS health unchanged through Cloudflare Access
+        if: always()
+        shell: bash
+        run: |
+          code=$(curl --silent --output /tmp/content-os-status.json --write-out '%{http_code}' \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            "https://umkm-content-os.ruang-belajar-mandiri01.workers.dev/api/status" || true)
+          cat /tmp/content-os-status.json || true
+          test "$code" = "200"
+          grep -q '"ok":true' /tmp/content-os-status.json
+          grep -q '"service":"UMKM Content OS"' /tmp/content-os-status.json

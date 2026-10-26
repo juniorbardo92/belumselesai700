@@ -1,0 +1,133 @@
+name: Monetization AI Learning Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-learning-acceptance.request'
+      - 'scripts/monetization-learning-acceptance.mjs'
+      - '.github/workflows/monetization-learning-acceptance.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+  BASE_URL: https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev
+
+jobs:
+  learning-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require explicit AI acceptance marker
+        shell: bash
+        run: |
+          test -f activation/monetization-learning-acceptance.request
+          grep -q '^release=monetization-engine-final-v1.0$' activation/monetization-learning-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-learning-acceptance.request
+          grep -q '^data_policy=isolated-and-cleanup$' activation/monetization-learning-acceptance.request
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$MONETIZATION_INGEST_TOKEN"
+
+      - name: Enable mandatory production Revenue Learning feature flag
+        shell: bash
+        run: printf '%s' 'true' | npx wrangler secret put MONETIZATION_AI_ENABLED --config wrangler.monetization.jsonc
+
+      - name: Verify learning flag propagated
+        shell: bash
+        run: |
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code=$(curl --silent --output /tmp/learning-status.json --write-out '%{http_code}' -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" "$BASE_URL/api/monetization/learning/status" || true)
+            if [ "$code" = "200" ] && grep -q '"enabled":true' /tmp/learning-status.json; then ok=1; break; fi
+            sleep 2
+          done
+          cat /tmp/learning-status.json
+          test "$ok" = "1"
+
+      - name: Select clean existing content for isolated learning test
+        id: content
+        shell: bash
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc \
+            --command="SELECT c.id FROM content_items c LEFT JOIN content_monetization cm ON cm.content_item_id=c.id WHERE c.brand_id='brand-umkm-naik-kelas' AND cm.content_item_id IS NULL ORDER BY c.created_at ASC LIMIT 1;" > /tmp/content.txt
+          CONTENT_ID=$(node -e "const fs=require('fs');const s=fs.readFileSync('/tmp/content.txt','utf8');const m=s.match(/\"id\"\s*:\s*\"([^\"]+)\"/);if(!m)process.exit(2);process.stdout.write(m[1])")
+          echo "content_id=$CONTENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Capture DeepSeek integration log baseline
+        id: baseline
+        shell: bash
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT COALESCE(MAX(id),0) max_id FROM monetization_integration_logs;" > /tmp/baseline.txt
+          BASELINE=$(node -e "const fs=require('fs');const s=fs.readFileSync('/tmp/baseline.txt','utf8');const m=s.match(/\"max_id\"\s*:\s*(\d+)/);process.stdout.write(m?m[1]:'0')")
+          echo "log_id=$BASELINE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate isolated AI acceptance tag
+        id: ids
+        shell: bash
+        run: echo "run_tag=ai-acceptance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Run AI Revenue Learning acceptance
+        env:
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+        run: node scripts/monetization-learning-acceptance.mjs
+
+      - name: Save AI learning acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monetization-learning-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: monetization-learning-acceptance-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Cleanup isolated AI acceptance data and insights
+        if: always()
+        shell: bash
+        env:
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+          BASELINE_LOG_ID: ${{ steps.baseline.outputs.log_id }}
+        run: |
+          if [ -z "$RUN_TAG" ]; then exit 0; fi
+          INSIGHT_IDS=""
+          if [ -f monetization-learning-acceptance-report.json ]; then
+            INSIGHT_IDS=$(node -e "const x=require('./monetization-learning-acceptance-report.json');process.stdout.write((x.newInsightIds||[]).map(v=>\"'\"+String(v).replaceAll(\"'\",\"''\")+\"'\").join(','))")
+          fi
+          if [ -n "$INSIGHT_IDS" ]; then
+            npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="DELETE FROM monetization_learning_insights WHERE id IN ($INSIGHT_IDS);"
+          fi
+          SQL="PRAGMA foreign_keys=ON;
+          DELETE FROM monetization_attributions WHERE revenue_event_id IN (SELECT id FROM monetization_revenue_events WHERE source='${RUN_TAG}-learning');
+          DELETE FROM monetization_revenue_events WHERE source='${RUN_TAG}-learning';
+          DELETE FROM monetization_events WHERE idempotency_key LIKE '${RUN_TAG}:%' OR source='ai-acceptance';
+          DELETE FROM content_monetization WHERE content_item_id='${ACCEPTANCE_CONTENT_ID}' AND metadata_json LIKE '%${RUN_TAG}%';
+          DELETE FROM monetization_campaigns WHERE id='${RUN_TAG}-campaign';
+          DELETE FROM monetization_offers WHERE id='${RUN_TAG}-offer';
+          DELETE FROM monetization_integration_logs WHERE provider='deepseek' AND operation='revenue_learning' AND id>${BASELINE_LOG_ID:-0};"
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="$SQL"
+
+      - name: Verify AI acceptance cleanup and feature remains enabled
+        if: always()
+        shell: bash
+        env:
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+        run: |
+          if [ -n "$RUN_TAG" ]; then
+            npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT (SELECT COUNT(*) FROM monetization_offers WHERE id='${RUN_TAG}-offer') offers,(SELECT COUNT(*) FROM monetization_campaigns WHERE id='${RUN_TAG}-campaign') campaigns,(SELECT COUNT(*) FROM monetization_events WHERE idempotency_key LIKE '${RUN_TAG}:%') events,(SELECT COUNT(*) FROM monetization_revenue_events WHERE source='${RUN_TAG}-learning') revenues;" | tee /tmp/cleanup.txt
+            for key in offers campaigns events revenues; do grep -Eq "\"${key}\"[[:space:]]*:[[:space:]]*0([,}]|$)" /tmp/cleanup.txt; done
+          fi
+          curl --fail --silent -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" "$BASE_URL/api/monetization/learning/status" | tee /tmp/status.json
+          grep -q '"configured":true' /tmp/status.json
+          grep -q '"enabled":true' /tmp/status.json

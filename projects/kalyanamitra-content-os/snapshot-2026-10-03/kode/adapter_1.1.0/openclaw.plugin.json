@@ -1,0 +1,30 @@
+{
+  "id": "kalyanamitra-content-pack-import",
+  "name": "Kalyanamitra Content Pack Import",
+  "description": "Imports canonical manual content packs as private Content OS drafts without sending file contents to a model.",
+  "version": "1.1.0",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "contentOsUrl": {
+        "type": "string",
+        "format": "uri",
+        "default": "https://umkm-content-os.ruang-belajar-mandiri01.workers.dev"
+      },
+      "agentId": {
+        "type": "string",
+        "const": "kalyanamitra",
+        "default": "kalyanamitra"
+      },
+      "accountId": {
+        "type": "string",
+        "const": "kalyanamitra",
+        "default": "kalyanamitra"
+      }
+    }
+  }
+}

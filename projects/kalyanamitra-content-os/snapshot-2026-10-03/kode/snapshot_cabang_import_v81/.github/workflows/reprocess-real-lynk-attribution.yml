@@ -1,0 +1,85 @@
+name: Reprocess Real Lynk Attribution
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/reprocess-lynk-attribution.request'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  reprocess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate real-evidence request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f activation/reprocess-lynk-attribution.request
+          grep -q '^mode=real-existing-revenue-only$' activation/reprocess-lynk-attribution.request
+          grep -q '^revenue_event_id=rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f$' activation/reprocess-lynk-attribution.request
+          grep -q '^transaction_id=668833d4c96fc82031a7c9d448b51848$' activation/reprocess-lynk-attribution.request
+          grep -q '^expected_touch_event_id=evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd$' activation/reprocess-lynk-attribution.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Reprocess existing real Lynk revenue attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          REVENUE_ID='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f'
+          code=$(curl --silent --show-error --output /tmp/reprocess.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE_URL/api/monetization/attribution/reprocess/$REVENUE_ID")
+          cat /tmp/reprocess.json
+          test "$code" = '200'
+          node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('/tmp/reprocess.json','utf8'));
+          if(body?.ok!==true) throw new Error('reprocess response not ok');
+          const a=body?.attribution??{};
+          if(a.attribution_status!=='attributed') throw new Error(`expected attributed, got ${a.attribution_status}`);
+          if(a.model!=='last_touch') throw new Error(`expected last_touch, got ${a.model}`);
+          if(a.first_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd') throw new Error('unexpected first_event_id');
+          if(a.last_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd') throw new Error('unexpected last_event_id');
+          NODE
+      - name: Verify D1 attribution and bounded evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute DB --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT revenue_event_id,attribution_status,model,first_event_id,last_event_id,metadata_json FROM monetization_attributions WHERE revenue_event_id='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f';" > /tmp/attribution.json
+          cat /tmp/attribution.json
+          npx wrangler d1 execute DB --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT operation,status,correlation_id,metadata_json,created_at FROM monetization_integration_logs WHERE provider='lynk' AND operation='bounded_attribution' AND correlation_id='668833d4c96fc82031a7c9d448b51848' ORDER BY datetime(created_at) DESC LIMIT 1;" > /tmp/evidence.json
+          cat /tmp/evidence.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const unwrap=(p)=>{const x=JSON.parse(fs.readFileSync(p,'utf8')); return x?.[0]?.results?.[0]??null};
+          const a=unwrap('/tmp/attribution.json');
+          if(!a) throw new Error('attribution row missing');
+          if(a.attribution_status!=='attributed'||a.model!=='last_touch') throw new Error('D1 attribution not attributed/last_touch');
+          if(a.first_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd'||a.last_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd') throw new Error('D1 touch event mismatch');
+          const m=JSON.parse(a.metadata_json||'{}');
+          if(m.evidenceVersion!=='1.1'||m.candidateCount!==1||m.clockAnchor!=='revenue_created_at_utc'||m.touchReusePrevented!==true) throw new Error('D1 attribution metadata evidence mismatch');
+          const e=unwrap('/tmp/evidence.json');
+          if(!e||e.status!=='success') throw new Error('bounded evidence success row missing');
+          const em=JSON.parse(e.metadata_json||'{}');
+          if(em.evidenceVersion!=='1.1'||em.candidateCount!==1||em.clockAnchor!=='revenue_created_at_utc'||em.touchReusePrevented!==true) throw new Error('bounded evidence metadata mismatch');
+          NODE

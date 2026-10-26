@@ -1,0 +1,55 @@
+name: Build APK Panglima UMKM
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build APK Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Ambil source code
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Siapkan Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Pastikan Android SDK 35 tersedia
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Siapkan Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Jalankan pengujian logika aplikasi
+        run: node --test tests/app.test.js
+
+      - name: Build APK debug yang bisa dipasang
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Beri nama file APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Panglima-UMKM-v1.0.0-SAFE.apk
+
+      - name: Simpan APK sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Panglima-UMKM-APK-SAFE
+          path: app/build/outputs/apk/debug/Panglima-UMKM-v1.0.0-SAFE.apk
+          if-no-files-found: error
+          retention-days: 30

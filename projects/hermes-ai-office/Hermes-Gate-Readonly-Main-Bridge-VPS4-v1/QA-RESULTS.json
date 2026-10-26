@@ -1,0 +1,12 @@
+{
+  "status": "LOCAL_QA_PASS",
+  "tests": 24,
+  "failures": 0,
+  "reextracted_tests": 24,
+  "read_only_sample": "SNAPSHOT_SOURCE_PASS",
+  "sample_task_count": 81,
+  "vps4_deployed": false,
+  "live_cross_user_uat": false,
+  "production_changes": false,
+  "boundary": "Main read-only snapshot only; claim and dispatch still require canonical gate"
+}

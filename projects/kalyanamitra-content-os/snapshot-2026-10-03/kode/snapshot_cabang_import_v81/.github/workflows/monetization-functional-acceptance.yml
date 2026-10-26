@@ -1,0 +1,132 @@
+name: Monetization Functional Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-functional-acceptance.request'
+      - 'scripts/monetization-functional-acceptance.mjs'
+      - '.github/workflows/monetization-functional-acceptance.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+  BASE_URL: https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Require explicit functional acceptance marker
+        shell: bash
+        run: |
+          test -f activation/monetization-functional-acceptance.request
+          grep -q '^release=monetization-engine-final-v1.0$' activation/monetization-functional-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-functional-acceptance.request
+          grep -q '^data_policy=isolated-and-cleanup$' activation/monetization-functional-acceptance.request
+
+      - name: Verify credentials
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$MONETIZATION_INGEST_TOKEN"
+
+      - name: Select an existing content item with no monetization metadata
+        id: content
+        shell: bash
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc \
+            --command="SELECT c.id FROM content_items c LEFT JOIN content_monetization cm ON cm.content_item_id=c.id WHERE c.brand_id='brand-umkm-naik-kelas' AND cm.content_item_id IS NULL ORDER BY c.created_at ASC LIMIT 1;" \
+            > /tmp/content-query.txt
+          cat /tmp/content-query.txt
+          CONTENT_ID=$(node -e "const fs=require('fs');const s=fs.readFileSync('/tmp/content-query.txt','utf8');const m=s.match(/\"id\"\s*:\s*\"([^\"]+)\"/);if(!m)process.exit(2);process.stdout.write(m[1])")
+          test -n "$CONTENT_ID"
+          echo "content_id=$CONTENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Generate isolated acceptance identifiers
+        id: ids
+        shell: bash
+        run: |
+          SHORT="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "run_tag=acceptance-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "slug=accept${SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Run end-to-end Monetization functional acceptance
+        env:
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+          ACCEPTANCE_SLUG: ${{ steps.ids.outputs.slug }}
+        run: node scripts/monetization-functional-acceptance.mjs
+
+      - name: Save acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monetization-functional-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: monetization-functional-acceptance-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Cleanup isolated acceptance records
+        if: always()
+        shell: bash
+        env:
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+          ACCEPTANCE_SLUG: ${{ steps.ids.outputs.slug }}
+        run: |
+          if [ -z "$RUN_TAG" ]; then
+            echo 'RUN_TAG unavailable; no acceptance writes could have started.'
+            exit 0
+          fi
+          OFFER_ID="${RUN_TAG}-offer"
+          CAMPAIGN_ID="${RUN_TAG}-campaign"
+          EXPERIMENT_ID="${RUN_TAG}-experiment"
+          PROVIDER="${RUN_TAG}-affiliate"
+          MAPPING_ID="${RUN_TAG}-mapping"
+          MANUAL_SOURCE="${RUN_TAG}-manual"
+          SQL="PRAGMA foreign_keys=ON;
+          DELETE FROM monetization_reconciliation_items WHERE reconciliation_run_id IN (SELECT id FROM monetization_reconciliation_runs WHERE source='${PROVIDER}');
+          DELETE FROM monetization_reconciliation_runs WHERE source='${PROVIDER}';
+          DELETE FROM monetization_integration_logs WHERE provider='${PROVIDER}' OR correlation_id LIKE '${RUN_TAG}%';
+          DELETE FROM monetization_attributions WHERE revenue_event_id IN (SELECT id FROM monetization_revenue_events WHERE source='${PROVIDER}' OR source='${MANUAL_SOURCE}');
+          DELETE FROM monetization_revenue_events WHERE source='${PROVIDER}' OR source='${MANUAL_SOURCE}';
+          DELETE FROM monetization_provider_mappings WHERE id='${MAPPING_ID}' OR provider='${PROVIDER}';
+          DELETE FROM monetization_events WHERE idempotency_key LIKE '${RUN_TAG}:%' OR visitor_id='${RUN_TAG}-visitor';
+          DELETE FROM monetization_tracked_links WHERE slug='${ACCEPTANCE_SLUG}';
+          DELETE FROM monetization_experiments WHERE id='${EXPERIMENT_ID}';
+          DELETE FROM content_monetization WHERE content_item_id='${ACCEPTANCE_CONTENT_ID}' AND metadata_json LIKE '%${RUN_TAG}%';
+          DELETE FROM monetization_campaigns WHERE id='${CAMPAIGN_ID}';
+          DELETE FROM monetization_offers WHERE id='${OFFER_ID}';"
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="$SQL"
+
+      - name: Verify acceptance cleanup
+        if: always()
+        shell: bash
+        env:
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+          ACCEPTANCE_SLUG: ${{ steps.ids.outputs.slug }}
+        run: |
+          if [ -z "$RUN_TAG" ]; then exit 0; fi
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc \
+            --command="SELECT (SELECT COUNT(*) FROM monetization_offers WHERE id='${RUN_TAG}-offer') offers, (SELECT COUNT(*) FROM monetization_campaigns WHERE id='${RUN_TAG}-campaign') campaigns, (SELECT COUNT(*) FROM monetization_tracked_links WHERE slug='${ACCEPTANCE_SLUG}') links, (SELECT COUNT(*) FROM monetization_events WHERE idempotency_key LIKE '${RUN_TAG}:%' OR visitor_id='${RUN_TAG}-visitor') events, (SELECT COUNT(*) FROM monetization_revenue_events WHERE source IN ('${RUN_TAG}-affiliate','${RUN_TAG}-manual')) revenues;" \
+            | tee /tmp/cleanup.txt
+          for key in offers campaigns links events revenues; do
+            grep -Eq "\"${key}\"[[:space:]]*:[[:space:]]*0([,}]|$)" /tmp/cleanup.txt || {
+              echo "cleanup check failed for ${key}"
+              exit 2
+            }
+          done

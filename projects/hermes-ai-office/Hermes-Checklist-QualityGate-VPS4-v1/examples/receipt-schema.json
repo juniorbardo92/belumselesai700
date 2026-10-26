@@ -1,0 +1,21 @@
+{
+  "task_id": "K05",
+  "token": "TOKEN_DARI_OUTPUT_CLAIM_JANGAN_DIBAGIKAN",
+  "run_id": "k05-20261018t160000",
+  "actor": "reviewer",
+  "scope": "audit",
+  "baseline": "repliz-kal-pilot-001-before-proof-18oct",
+  "tests": {
+    "command": "python3 read_only_verify_kal_pilot.py",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "exit_code": 0
+  },
+  "artifacts": [
+    {
+      "path": "/home/ubuntu/.local/state/hermes-quality-gate/evidence/k05-readonly-result.json",
+      "sha256": "GANTI_DENGAN_64_DIGIT_HASH_ASLI"
+    }
+  ]
+}

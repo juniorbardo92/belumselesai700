@@ -1,0 +1,70 @@
+{
+  "id": "kalyanamitra-content-os",
+  "name": "Kalyanamitra Content OS Bridge",
+  "description": "Bridge terisolasi dari Asisten Kalyanamitra ke Content OS dengan namespace, verifikasi sumber, approval manusia, dan Repliz draft-only.",
+  "version": "1.0.3",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "minLength": 12,
+        "description": "URL Worker Content OS tanpa slash di akhir. Diisi installer dari registry aktif; tool berhenti fail-closed bila belum tersedia."
+      },
+      "tokenEnvName": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+        "default": "UMKM_CONTENT_OS_TOKEN",
+        "description": "Nama environment variable token ingress. Nilai token tidak disimpan dalam konfigurasi plugin."
+      },
+      "allowedReplizAccountId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Kunci akun tunggal versi lama. Diterima untuk kompatibilitas konfigurasi, tetapi tidak digunakan oleh workflow multi-platform v1.0.3."
+      },
+      "allowedReplizInstagramAccountId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Account ID Repliz Instagram Ruang Kalyanamitra yang dikunci operator."
+      },
+      "allowedReplizThreadsAccountId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Account ID Repliz Threads Ruang Kalyanamitra yang dikunci operator."
+      },
+      "allowedReplizUsername": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "description": "Username akun Ruang Kalyanamitra untuk pemeriksaan silang read-only."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 5000,
+        "maximum": 30000,
+        "default": 20000
+      },
+      "ledgerPath": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 1000,
+        "description": "Path opsional untuk ledger namespace lokal. Default berada di state OpenClaw dan di luar workspace model."
+      }
+    }
+  },
+  "contracts": {
+    "tools": [
+      "kalyanamitra_content_draft_create",
+      "kalyanamitra_content_draft_get",
+      "kalyanamitra_content_repliz_account",
+      "kalyanamitra_content_workflow"
+    ]
+  }
+}

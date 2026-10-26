@@ -1,0 +1,87 @@
+{
+  "registry_version": "kalyanamitra-source-providers.v1",
+  "reviewed_on": "2026-09-02",
+  "scope_note": "Provider recognition does not verify every item, quotation, locator, interpretation, or generated claim. Exact source-to-claim review remains required.",
+  "providers": [
+    {
+      "provider_id": "suttacentral",
+      "name": "SuttaCentral",
+      "url": "https://suttacentral.net/",
+      "provider_type": "canonical-translation-collection",
+      "traditions": ["theravada", "early-buddhist-texts"],
+      "status": "approved-provider",
+      "use_for": "Early Buddhist texts, parallels, and identified modern translations.",
+      "item_rule": "Cite the exact discourse or verse page, language, translator, and locator."
+    },
+    {
+      "provider_id": "84000",
+      "name": "84000: Translating the Words of the Buddha",
+      "url": "https://84000.co/",
+      "provider_type": "canonical-translation-collection",
+      "traditions": ["mahayana", "vajrayana", "tibetan-buddhist-canon"],
+      "status": "approved-provider",
+      "use_for": "Translations from the Tibetan Buddhist canon.",
+      "item_rule": "Cite the exact translation page, Toh identifier when available, section, and translator team information."
+    },
+    {
+      "provider_id": "bdk-america",
+      "name": "BDK America — English Tripitaka",
+      "url": "https://www.bdkamerica.org/tripitaka-list/",
+      "provider_type": "canonical-translation-collection",
+      "traditions": ["mahayana", "east-asian-buddhism"],
+      "status": "approved-provider",
+      "use_for": "English translations from the Chinese Buddhist canon and related East Asian collections.",
+      "item_rule": "Cite the exact work, translator, publication, and page or section."
+    },
+    {
+      "provider_id": "lotsawa-house",
+      "name": "Lotsawa House",
+      "url": "https://www.lotsawahouse.org/",
+      "provider_type": "established-translation-library",
+      "traditions": ["vajrayana", "tibetan-buddhism"],
+      "status": "approved-provider",
+      "use_for": "Translations of Tibetan Buddhist texts across lineages.",
+      "item_rule": "Cite the exact author, translator, title, tradition or lineage context, and page section."
+    },
+    {
+      "provider_id": "tergar",
+      "name": "Tergar Meditation Community",
+      "url": "https://tergar.org/",
+      "provider_type": "official-teacher-lineage-source",
+      "traditions": ["vajrayana", "kagyu", "nyingma"],
+      "status": "approved-provider",
+      "use_for": "Official public teachings and practice guidance associated with Mingyur Rinpoche and Tergar.",
+      "item_rule": "Use only public material, name the teacher and program, and respect transmission or participation requirements."
+    },
+    {
+      "provider_id": "samye-institute",
+      "name": "Samye Institute",
+      "url": "https://www.samyeinstitute.org/",
+      "provider_type": "official-teacher-lineage-source",
+      "traditions": ["vajrayana", "tibetan-buddhism"],
+      "status": "approved-provider",
+      "use_for": "Public teachings and practice resources associated with Phakchok Rinpoche and Samye Institute.",
+      "item_rule": "Identify the teacher, article or course, date when relevant, and any practice prerequisites."
+    },
+    {
+      "provider_id": "samye-mandala",
+      "name": "Samye Mandala",
+      "url": "https://www.samyemandala.org/",
+      "provider_type": "official-teacher-lineage-source",
+      "traditions": ["vajrayana", "tibetan-buddhism"],
+      "status": "approved-provider",
+      "use_for": "Public Dharma activities and teachings within the Samye Mandala context.",
+      "item_rule": "Cite the exact public teaching and do not reproduce restricted practice instructions."
+    },
+    {
+      "provider_id": "kagyu-office",
+      "name": "Kagyu Office — Official Website of the 17th Gyalwang Karmapa",
+      "url": "https://kagyuoffice.org/teachings/",
+      "provider_type": "official-teacher-lineage-source",
+      "traditions": ["vajrayana", "karma-kagyu"],
+      "status": "approved-provider",
+      "use_for": "Public teachings and official materials associated with the 17th Gyalwang Karmapa and Kagyu Office.",
+      "item_rule": "Cite the exact teaching title, date, speaker, and relevant section or timestamp."
+    }
+  ]
+}

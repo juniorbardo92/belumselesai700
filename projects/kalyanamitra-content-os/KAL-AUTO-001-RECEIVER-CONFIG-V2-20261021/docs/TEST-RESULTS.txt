@@ -1,0 +1,57 @@
+test_missing_sender_binding_blocks (test_bridge.BridgeTests.test_missing_sender_binding_blocks) ... ok
+test_remote_fail_no_post_claim (test_bridge.BridgeTests.test_remote_fail_no_post_claim) ... ok
+test_success_outbound_strict_ssh (test_bridge.BridgeTests.test_success_outbound_strict_ssh) ... ok
+test_transport_off_blocks (test_bridge.BridgeTests.test_transport_off_blocks) ... ok
+test_unsafe_host_blocks (test_bridge.BridgeTests.test_unsafe_host_blocks) ... ok
+test_accept_and_dedup (test_kalauto.KalAutoTests.test_accept_and_dedup) ... ok
+test_bad_permission_secret (test_kalauto.KalAutoTests.test_bad_permission_secret) ... ok
+test_bad_publisher_hash_blocks_without_claim (test_kalauto.KalAutoTests.test_bad_publisher_hash_blocks_without_claim) ... ok
+test_bad_signature (test_kalauto.KalAutoTests.test_bad_signature) ... ok
+test_cross_message_same_source_same_slot (test_kalauto.KalAutoTests.test_cross_message_same_source_same_slot) ... ok
+test_draft_no_post (test_kalauto.KalAutoTests.test_draft_no_post) ... ok
+test_historic_guard (test_kalauto.KalAutoTests.test_historic_guard) ... ok
+test_live_mock_publisher_in_clone (test_kalauto.KalAutoTests.test_live_mock_publisher_in_clone) ... ok
+test_message_id_invalid (test_kalauto.KalAutoTests.test_message_id_invalid) ... ok
+test_missing_source (test_kalauto.KalAutoTests.test_missing_source) ... ok
+test_mock_schedule (test_kalauto.KalAutoTests.test_mock_schedule) ... ok
+test_no_live_without_switch (test_kalauto.KalAutoTests.test_no_live_without_switch) ... ok
+test_old_timestamp (test_kalauto.KalAutoTests.test_old_timestamp) ... ok
+test_oversize_utf8 (test_kalauto.KalAutoTests.test_oversize_utf8) ... ok
+test_parallel_ingest_no_duplicate (test_kalauto.KalAutoTests.test_parallel_ingest_no_duplicate) ... /usr/lib/python3.13/pathlib/_local.py:128: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7efc158a4130>
+  path = os.fspath(arg)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/pathlib/_local.py:128: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7efc158a4310>
+  path = os.fspath(arg)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/pathlib/_local.py:128: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7efc158a46d0>
+  path = os.fspath(arg)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/pathlib/_local.py:128: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7efc158a47c0>
+  path = os.fspath(arg)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_publish_asap_is_scheduled_not_instant (test_kalauto.KalAutoTests.test_publish_asap_is_scheduled_not_instant) ... ok
+test_schema_preflight_fails (test_kalauto.KalAutoTests.test_schema_preflight_fails) ... ok
+test_single_post_publish_blocked (test_kalauto.KalAutoTests.test_single_post_publish_blocked) ... ok
+test_slot_far (test_kalauto.KalAutoTests.test_slot_far) ... ok
+test_slot_old (test_kalauto.KalAutoTests.test_slot_old) ... ok
+test_too_many_parts (test_kalauto.KalAutoTests.test_too_many_parts) ... ok
+test_unknown_command (test_kalauto.KalAutoTests.test_unknown_command) ... ok
+test_unknown_field (test_kalauto.KalAutoTests.test_unknown_field) ... ok
+test_unverified_source (test_kalauto.KalAutoTests.test_unverified_source) ... ok
+test_wrong_account (test_kalauto.KalAutoTests.test_wrong_account) ... ok
+test_wrong_owner (test_kalauto.KalAutoTests.test_wrong_owner) ... ok
+test_block_non_numeric_owner_allowlist (test_receiver.IntakeTests.test_block_non_numeric_owner_allowlist) ... ok
+test_config_permissions (test_receiver.IntakeTests.test_config_permissions) ... ok
+test_duplicate_no_publish (test_receiver.IntakeTests.test_duplicate_no_publish) ... ok
+test_forbid_invalid_signature (test_receiver.IntakeTests.test_forbid_invalid_signature) ... ok
+test_forbid_remote_commands (test_receiver.IntakeTests.test_forbid_remote_commands) ... ok
+test_forbid_unsigned_payload (test_receiver.IntakeTests.test_forbid_unsigned_payload) ... ok
+test_receive_draft_only (test_receiver.IntakeTests.test_receive_draft_only) ... ok
+test_too_large (test_receiver.IntakeTests.test_too_large) ... ok
+test_valid_binding_but_runtime_unverified (test_receiver.IntakeTests.test_valid_binding_but_runtime_unverified) ... ok
+
+----------------------------------------------------------------------
+Ran 40 tests in 1.154s
+
+OK

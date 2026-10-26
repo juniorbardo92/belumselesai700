@@ -1,0 +1,1940 @@
+const SPREADSHEET_ID = 'REPLACE_RESOURCE_ID';
+const SHEET_NAME = 'Affiliate Registry';
+const SITE_URL = 'https://umkmnaikkelas.id';
+const EMAIL_SENDER_NAME = 'UMKM Naik Kelas';
+
+// STEP 6B — DELIVERABILITY
+// Kosongkan SENDER_ALIAS bila belum memiliki alamat @umkmnaikkelas.id
+// yang sudah ditambahkan ke Gmail sebagai "Send mail as" alias.
+// Contoh nanti: affiliate@umkmnaikkelas.id
+const SENDER_ALIAS = 'halo@umkmnaikkelas.id';
+const REPLY_TO_EMAIL = 'halo@umkmnaikkelas.id'; // kosong = memakai email akun Apps Script/Gmail yang menjalankan script
+
+const PRODUCT_PRICE = 'Rp349.000';
+const COMMISSION_RATE = '12%';
+const COMMISSION_PER_SALE = 'Rp41.880';
+
+const AFFILIATE_EVENTS_SHEET = 'Affiliate Events';
+const AFFILIATE_EVENTS_COLUMNS = 16;
+
+const AFFILIATE_TRANSACTIONS_SHEET = 'Affiliate Transactions';
+const AFFILIATE_COMMISSIONS_SHEET = 'Affiliate Commissions';
+const LYNK_WEBHOOK_RAW_SHEET = 'Lynk Webhook Raw';
+const PANGLIMA_PRODUCT_PRICE = 349000;
+const PANGLIMA_COMMISSION_RATE = 0.12;
+const PANGLIMA_COMMISSION_AMOUNT = 41880;
+
+/* =========================================================
+   STEP 6A — EMAIL VERIFICATION + APPROVAL WELCOME EMAIL
+
+   Status flow:
+   PENDING_EMAIL -> email verified -> PENDING -> APPROVED
+
+   Columns:
+   U = Approval Email Status
+   V = Approval Email Sent At
+   W = Approval Email Error
+   X = Email Verified
+   Y = Email Verification Token
+   Z = Email Verified At
+   AA = Verification Email Sent At
+   AB = Verification Email Error
+   ========================================================= */
+
+function doGet(e) {
+  try {
+    const p = (e && e.parameter) || {};
+    const action = clean_(p.action || 'health').toLowerCase();
+    const callback = clean_(p.callback);
+
+    if (action === 'verify') {
+      return verifyAffiliateEmail_(clean_(p.token));
+    }
+
+    if (action === 'registry') {
+      return jsonOrJsonp_(getApprovedAffiliateRegistry_(), callback);
+    }
+
+    return jsonOrJsonp_({
+      ok: true,
+      service: 'Panglima Affiliate Registry',
+      version: 'step9b-lynk-real-payload',
+    }, callback);
+  } catch (err) {
+    return jsonOrJsonp_({
+      ok: false,
+      message: String(err && err.message ? err.message : err),
+    }, clean_((e && e.parameter && e.parameter.callback) || ''));
+  }
+}
+
+function doPost(e) {
+  try {
+    const p = (e && e.parameter) || {};
+    const action = clean_(p.action).toLowerCase();
+
+    // STEP 8 — Affiliate page-view / checkout-click tracking.
+    // Diproses sebelum validasi form pendaftaran.
+    if (action === 'affiliate_event') {
+      return handleAffiliateEvent_(p);
+    }
+
+    // STEP 9 — Lynk/payment webhook ingestion.
+    // Accepts either form-encoded fields or JSON payload.
+    const webhookEvent = clean_(p.event || p.type || p.eventType).toLowerCase();
+    if (
+      action === 'payment_webhook' ||
+      webhookEvent === 'payment.received' ||
+      webhookEvent === 'payment_received'
+    ) {
+      return handlePaymentWebhook_(e, p);
+    }
+
+    const name = clean_(p.name);
+    const whatsapp = normalizePhone_(p.whatsapp);
+    const email = clean_(p.email).toLowerCase();
+    const social = clean_(p.social);
+    const city = clean_(p.city);
+    const profession = clean_(p.profession);
+    const reason = clean_(p.reason);
+    const agree = clean_(p.agree) === 'YA' ? 'YA' : 'TIDAK';
+    const sourcePage = clean_(p.sourcePage);
+    const userAgent = clean_(p.userAgent);
+
+    if (!name || !whatsapp || !email || !city || !profession || !reason || agree !== 'YA') {
+      return json_({ ok: false, message: 'Data wajib belum lengkap.' });
+    }
+
+    if (!isValidEmail_(email)) {
+      return json_({ ok: false, message: 'Alamat email tidak valid.' });
+    }
+
+    const firstName = getFirstName_(name);
+    const referralCode = createReferralCode_(firstName, whatsapp);
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+    ensureStep6AHeaders_(sheet);
+
+    const lastRow = sheet.getLastRow();
+    const existing = lastRow > 1
+      ? sheet.getRange(2, 1, lastRow - 1, 29).getDisplayValues()
+      : [];
+
+    const codeExists = existing.some(r => clean_(r[10]).toUpperCase() === referralCode);
+    const phoneExists = existing.some(r => normalizePhone_(r[3]) === whatsapp);
+    const emailExists = existing.some(r => clean_(r[4]).toLowerCase() === email);
+
+    let slugBase = slugify_(firstName);
+    let slug = slugBase;
+    const usedSlugs = new Set(existing.map(r => clean_(r[11]).toLowerCase()).filter(Boolean));
+    if (usedSlugs.has(slug)) slug = `${slugBase}-${whatsapp.slice(-3)}`;
+    let suffix = 2;
+    while (usedSlugs.has(slug)) {
+      slug = `${slugBase}-${whatsapp.slice(-3)}-${suffix}`;
+      suffix++;
+    }
+
+    const duplicate = codeExists || phoneExists || emailExists;
+    const duplicateNotes = [
+      codeExists ? 'KODE' : '',
+      phoneExists ? 'WHATSAPP' : '',
+      emailExists ? 'EMAIL' : '',
+    ].filter(Boolean).join(', ');
+
+    const status = duplicate ? 'REVIEW_DUPLICATE' : 'PENDING_EMAIL';
+    const affiliatePage = `${SITE_URL}/?affiliate=${encodeURIComponent(slug)}`;
+    const verificationToken = duplicate ? '' : createVerificationToken_();
+
+    sheet.appendRow([
+      new Date(),                  // A Timestamp
+      name,                        // B Nama Lengkap
+      firstName,                   // C Nama Depan
+      whatsapp,                    // D WhatsApp
+      email,                       // E Email
+      social,                      // F Social
+      city,                        // G Kota
+      profession,                  // H Profesi
+      reason,                      // I Alasan
+      agree,                       // J Setuju
+      referralCode,                // K Kode
+      slug,                        // L Slug
+      affiliatePage,               // M Halaman
+      status,                      // N Status
+      '',                          // O Link Lynk
+      '',                          // P Tanggal Approval
+      duplicate ? `Periksa duplikat: ${duplicateNotes}` : '', // Q Catatan
+      sourcePage,                  // R Source
+      userAgent,                   // S UA
+      duplicate ? `DUPLICATE: ${duplicateNotes}` : 'OK', // T Duplicate
+      '',                          // U Approval Email Status
+      '',                          // V Approval Email Sent At
+      '',                          // W Approval Email Error
+      duplicate ? 'NO' : 'NO',     // X Email Verified
+      verificationToken,           // Y Token
+      '',                          // Z Verified At
+      '',                          // AA Verification Email Sent At
+      '',                          // AB Verification Email Error
+      `${SITE_URL}/?affiliate=${encodeURIComponent(slug)}&kit=1`, // AC Marketing Kit URL
+    ]);
+
+    const row = sheet.getLastRow();
+
+    if (!duplicate) {
+      try {
+        sendVerificationEmailForRow_(sheet, row);
+      } catch (err) {
+        sheet.getRange(row, 14).setValue('EMAIL_ERROR');
+        sheet.getRange(row, 28).setValue(String(err && err.message ? err.message : err));
+      }
+    }
+
+    return json_({
+      ok: true,
+      status,
+      referralCode,
+      slug,
+      affiliatePage,
+      duplicate,
+      verificationRequired: !duplicate,
+    });
+  } catch (err) {
+    console.error(err);
+    return json_({
+      ok: false,
+      message: String(err && err.message ? err.message : err),
+    });
+  }
+}
+
+/* =========================================================
+   RUN ONCE AFTER PASTING STEP 6C
+   ========================================================= */
+function setupStep6C() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  ensureStep6AHeaders_(sheet);
+
+  // Migrate existing APPROVED affiliates so active pages do not disappear.
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const rows = sheet.getRange(2, 1, lastRow - 1, 29).getDisplayValues();
+    rows.forEach((r, i) => {
+      const row = i + 2;
+      const status = clean_(r[13]).toUpperCase();
+      const verified = clean_(r[23]).toUpperCase();
+      if (status === 'APPROVED' && verified !== 'YES') {
+        sheet.getRange(row, 24).setValue('YES');
+        const approvalDate = sheet.getRange(row, 16).getValue();
+        sheet.getRange(row, 26).setValue(approvalDate || new Date());
+      }
+    });
+  }
+
+  // Remove old approval triggers to prevent duplicate welcome emails.
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'handleAffiliateApproval') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('handleAffiliateApproval')
+    .forSpreadsheet(SPREADSHEET_ID)
+    .onEdit()
+    .create();
+
+  const quota = MailApp.getRemainingDailyQuota();
+  Logger.log(`Step 6C aktif. Sisa kuota email hari ini: ${quota}`);
+  return `Step 6C aktif. Sisa kuota email hari ini: ${quota}`;
+}
+
+
+/* =========================================================
+   STEP 8 — AFFILIATE EVENT TRACKING
+   Event types:
+   PAGE_VIEW
+   CHECKOUT_CLICK
+
+   Data disimpan ke tab "Affiliate Events".
+   Ringkasan otomatis disimpan di Affiliate Registry:
+   AD = Total Page Views
+   AE = Total Checkout Clicks
+   AF = Last Affiliate Activity
+   ========================================================= */
+
+function handleAffiliateEvent_(p) {
+  const eventType = clean_(p.eventType).toUpperCase();
+  if (!['PAGE_VIEW', 'CHECKOUT_CLICK'].includes(eventType)) {
+    return json_({ ok: false, message: 'Event affiliate tidak valid.' });
+  }
+
+  const referralCode = clean_(p.referralCode).toUpperCase();
+  const slug = clean_(p.slug).toLowerCase();
+
+  if (!referralCode && !slug) {
+    return json_({ ok: false, message: 'Kode referral / slug kosong.' });
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const eventsSheet = ensureAffiliateEventsSheet_(ss);
+  const registrySheet = ss.getSheetByName(SHEET_NAME);
+  if (!registrySheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  const now = new Date();
+  const eventId = Utilities.getUuid();
+
+  eventsSheet.appendRow([
+    now,
+    eventId,
+    eventType,
+    referralCode,
+    slug,
+    clean_(p.partnerName),
+    clean_(p.visitorId),
+    clean_(p.pageUrl),
+    clean_(p.destinationUrl),
+    clean_(p.referrer),
+    clean_(p.utmSource),
+    clean_(p.utmMedium),
+    clean_(p.utmCampaign),
+    clean_(p.utmContent),
+    clean_(p.utmTerm),
+    clean_(p.userAgent),
+  ]);
+
+  updateAffiliateActivitySummary_(
+    registrySheet,
+    referralCode,
+    slug,
+    eventType,
+    now
+  );
+
+  return json_({
+    ok: true,
+    eventId,
+    eventType,
+  });
+}
+
+function ensureAffiliateEventsSheet_(ss) {
+  let sheet = ss.getSheetByName(AFFILIATE_EVENTS_SHEET);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(AFFILIATE_EVENTS_SHEET);
+  }
+
+  if (sheet.getMaxColumns() < AFFILIATE_EVENTS_COLUMNS) {
+    sheet.insertColumnsAfter(
+      sheet.getMaxColumns(),
+      AFFILIATE_EVENTS_COLUMNS - sheet.getMaxColumns()
+    );
+  }
+
+  const headers = [
+    'Timestamp',
+    'Event ID',
+    'Event Type',
+    'Kode Referral',
+    'Slug',
+    'Partner Name',
+    'Visitor ID',
+    'Page URL',
+    'Destination URL',
+    'Referrer',
+    'UTM Source',
+    'UTM Medium',
+    'UTM Campaign',
+    'UTM Content',
+    'UTM Term',
+    'User Agent',
+  ];
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.setFrozenRows(1);
+
+  return sheet;
+}
+
+function ensureStep8RegistryColumns_(sheet) {
+  if (sheet.getMaxColumns() < 32) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 32 - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 30, 1, 3).setValues([[
+    'Total Page Views',
+    'Total Checkout Clicks',
+    'Last Affiliate Activity',
+  ]]);
+}
+
+function updateAffiliateActivitySummary_(sheet, referralCode, slug, eventType, now) {
+  ensureStep8RegistryColumns_(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, 32).getDisplayValues();
+  const targetIndex = rows.findIndex(r => {
+    const rowCode = clean_(r[10]).toUpperCase();
+    const rowSlug = clean_(r[11]).toLowerCase();
+
+    if (referralCode && rowCode === referralCode) return true;
+    if (slug && rowSlug === slug) return true;
+    return false;
+  });
+
+  if (targetIndex < 0) return;
+
+  const row = targetIndex + 2;
+
+  if (eventType === 'PAGE_VIEW') {
+    const current = Number(sheet.getRange(row, 30).getValue()) || 0;
+    sheet.getRange(row, 30).setValue(current + 1);
+  }
+
+  if (eventType === 'CHECKOUT_CLICK') {
+    const current = Number(sheet.getRange(row, 31).getValue()) || 0;
+    sheet.getRange(row, 31).setValue(current + 1);
+  }
+
+  sheet.getRange(row, 32).setValue(now);
+}
+
+
+/* =========================================================
+   STEP 9 — PURCHASE + COMMISSION LEDGER
+   ========================================================= */
+
+function parseWebhookPayload_(e, p) {
+  let json = {};
+  const raw = (e && e.postData && e.postData.contents) || '';
+
+  try {
+    if (raw) json = JSON.parse(raw);
+  } catch (err) {
+    json = {};
+  }
+
+  return {
+    raw: raw || JSON.stringify(p || {}),
+    root: json && typeof json === 'object' ? json : {},
+    form: p || {},
+  };
+}
+
+function pickWebhookValue_(payload, candidates) {
+  for (const key of candidates) {
+    const parts = key.split('.');
+    let v = payload.root;
+    let ok = true;
+
+    for (const part of parts) {
+      if (v && Object.prototype.hasOwnProperty.call(v, part)) {
+        v = v[part];
+      } else {
+        ok = false;
+        break;
+      }
+    }
+
+    if (ok && v !== undefined && v !== null && String(v).trim() !== '') {
+      return v;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(payload.form, key) &&
+      clean_(payload.form[key])
+    ) {
+      return payload.form[key];
+    }
+  }
+
+  return '';
+}
+
+function numberWebhookValue_(value) {
+  if (typeof value === 'number') return value;
+  const digits = String(value || '').replace(/[^\d.-]/g, '');
+  return Number(digits) || 0;
+}
+
+function normalizePaymentStatus_(value, eventType) {
+  const s = clean_(value).toLowerCase();
+  const e = clean_(eventType).toLowerCase();
+
+  if (
+    e === 'payment.received' ||
+    e === 'payment_received' ||
+    ['paid', 'success', 'successful', 'completed', 'received'].includes(s)
+  ) {
+    return 'PAID';
+  }
+
+  if (['refunded', 'refund'].includes(s)) return 'REFUNDED';
+  if (['cancelled', 'canceled', 'failed', 'expired'].includes(s)) return s.toUpperCase();
+
+  return s ? s.toUpperCase() : 'UNKNOWN';
+}
+
+function findAffiliateForPayment_(registrySheet, affiliateCode, affiliateSlug, checkoutUrl) {
+  const lastRow = registrySheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const rows = registrySheet.getRange(2, 1, lastRow - 1, Math.max(39, registrySheet.getLastColumn())).getDisplayValues();
+
+  const code = clean_(affiliateCode).toUpperCase();
+  const slug = clean_(affiliateSlug).toLowerCase();
+  const checkout = clean_(checkoutUrl);
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const rowCode = clean_(r[10]).toUpperCase();
+    const rowSlug = clean_(r[11]).toLowerCase();
+    const rowCheckout = clean_(r[14]);
+    const rowStatus = clean_(r[13]).toUpperCase();
+    const duplicateFlag = clean_(r[19]).toUpperCase();
+    const emailVerified = clean_(r[23]).toUpperCase();
+
+    if (rowStatus !== 'APPROVED' || duplicateFlag !== 'OK' || emailVerified !== 'YES') {
+      continue;
+    }
+
+    let source = '';
+    if (code && rowCode === code) source = 'AFFILIATE_CODE';
+    else if (slug && rowSlug === slug) source = 'AFFILIATE_SLUG';
+    else if (checkout && rowCheckout && rowCheckout === checkout) source = 'CHECKOUT_URL';
+
+    if (source) {
+      return {
+        row: i + 2,
+        code: rowCode,
+        slug: rowSlug,
+        name: clean_(r[1]),
+        checkoutUrl: rowCheckout,
+        source,
+      };
+    }
+  }
+
+  return null;
+}
+
+function ensureStep9Sheets_(ss) {
+  let tx = ss.getSheetByName(AFFILIATE_TRANSACTIONS_SHEET);
+  if (!tx) tx = ss.insertSheet(AFFILIATE_TRANSACTIONS_SHEET);
+
+  let comm = ss.getSheetByName(AFFILIATE_COMMISSIONS_SHEET);
+  if (!comm) comm = ss.insertSheet(AFFILIATE_COMMISSIONS_SHEET);
+
+  const txHeaders = [
+    'Received At','Transaction ID','Event Type','Payment Status','Product ID','Product Name',
+    'Buyer Name','Buyer Email','Buyer Phone','Amount','Currency','Affiliate Code','Affiliate Slug',
+    'Attribution Status','Attribution Source','Commission Eligible','Commission Amount',
+    'Commission Status','Raw Payload','Notes','Processed At'
+  ];
+
+  const commHeaders = [
+    'Commission ID','Transaction ID','Payment Date','Affiliate Code','Affiliate Slug','Affiliate Name',
+    'Product','Sale Amount','Commission Rate','Base Commission','Commission Status','Payout Status',
+    'Approved At','Paid At','Payout ID','Notes'
+  ];
+
+  if (tx.getMaxColumns() < txHeaders.length) {
+    tx.insertColumnsAfter(tx.getMaxColumns(), txHeaders.length - tx.getMaxColumns());
+  }
+  if (comm.getMaxColumns() < commHeaders.length) {
+    comm.insertColumnsAfter(comm.getMaxColumns(), commHeaders.length - comm.getMaxColumns());
+  }
+
+  tx.getRange(1, 1, 1, txHeaders.length).setValues([txHeaders]);
+  tx.setFrozenRows(1);
+
+  comm.getRange(1, 1, 1, commHeaders.length).setValues([commHeaders]);
+  comm.setFrozenRows(1);
+
+  return { tx, comm };
+}
+
+function ensureStep9RegistryColumns_(sheet) {
+  if (sheet.getMaxColumns() < 39) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 39 - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 33, 1, 7).setValues([[
+    'Total Purchases',
+    'Gross Revenue',
+    'Base Commission Earned',
+    'Commission Pending',
+    'Commission Approved',
+    'Commission Paid',
+    'Last Purchase',
+  ]]);
+}
+
+function transactionAlreadyExists_(txSheet, transactionId) {
+  const id = clean_(transactionId);
+  if (!id || txSheet.getLastRow() < 2) return false;
+
+  const values = txSheet.getRange(2, 2, txSheet.getLastRow() - 1, 1).getDisplayValues();
+  return values.some(r => clean_(r[0]) === id);
+}
+
+
+function pickWebhookObject_(payload, candidates) {
+  for (const key of candidates) {
+    const parts = key.split('.');
+    let v = payload.root;
+    let ok = true;
+
+    for (const part of parts) {
+      if (v && Object.prototype.hasOwnProperty.call(v, part)) {
+        v = v[part];
+      } else {
+        ok = false;
+        break;
+      }
+    }
+
+    if (ok && v && typeof v === 'object') return v;
+  }
+
+  return null;
+}
+
+function pickWebhookArray_(payload, candidates) {
+  for (const key of candidates) {
+    const parts = key.split('.');
+    let v = payload.root;
+    let ok = true;
+
+    for (const part of parts) {
+      if (v && Object.prototype.hasOwnProperty.call(v, part)) {
+        v = v[part];
+      } else {
+        ok = false;
+        break;
+      }
+    }
+
+    if (ok && Array.isArray(v)) return v;
+  }
+
+  return [];
+}
+
+function extractLynkItems_(payload) {
+  const items = pickWebhookArray_(payload, [
+    'items',
+    'data.items',
+    'order.items',
+    'data.order.items',
+  ]);
+
+  return items.map(item => ({
+    id: clean_(item && (item.id || item.productId || item.product_id)),
+    name: clean_(item && (item.name || item.productName || item.product_name || item.title)),
+    price: numberWebhookValue_(item && (item.price || item.amount || item.total)),
+    qty: Number(item && (item.qty || item.quantity || 1)) || 1,
+    raw: item || {},
+  }));
+}
+
+function summarizeLynkItems_(items) {
+  if (!items || !items.length) return '';
+  return items
+    .map(item => `${item.name || item.id || 'Item'} x${item.qty}`)
+    .join(' | ');
+}
+
+function ensureLynkRawSheet_(ss) {
+  let sheet = ss.getSheetByName(LYNK_WEBHOOK_RAW_SHEET);
+  if (!sheet) sheet = ss.insertSheet(LYNK_WEBHOOK_RAW_SHEET);
+
+  const headers = [
+    'Received At',
+    'Event',
+    'Ref ID',
+    'Message Action',
+    'Message Code',
+    'Customer',
+    'Grand Total',
+    'Items',
+    'Parse Result',
+    'Raw Payload',
+  ];
+
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+function logRawLynkWebhook_(ss, data) {
+  const sheet = ensureLynkRawSheet_(ss);
+  sheet.appendRow([
+    data.receivedAt || new Date(),
+    data.eventType || '',
+    data.refId || '',
+    data.messageAction || '',
+    data.messageCode || '',
+    data.customerLabel || '',
+    data.grandTotal || 0,
+    data.itemsSummary || '',
+    data.parseResult || '',
+    data.rawPayload || '',
+  ]);
+}
+
+function ensureStep9BTransactionColumns_(sheet) {
+  if (sheet.getMaxColumns() < 32) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 32 - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 22, 1, 11).setValues([[
+    'Lynk Created At',
+    'Message Action',
+    'Message Code',
+    'Total Price',
+    'Total Addon',
+    'Discount',
+    'Shipping',
+    'Items JSON',
+    'Manual Affiliate Code',
+    'Review Status',
+    'Reviewed At',
+  ]]);
+}
+
+function findAffiliateByCode_(registrySheet, affiliateCode) {
+  const code = clean_(affiliateCode).toUpperCase();
+  if (!code) return null;
+
+  const lastRow = registrySheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const rows = registrySheet
+    .getRange(2, 1, lastRow - 1, Math.max(39, registrySheet.getLastColumn()))
+    .getDisplayValues();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+
+    if (
+      clean_(r[10]).toUpperCase() === code &&
+      clean_(r[13]).toUpperCase() === 'APPROVED' &&
+      clean_(r[19]).toUpperCase() === 'OK' &&
+      clean_(r[23]).toUpperCase() === 'YES'
+    ) {
+      return {
+        row: i + 2,
+        code,
+        slug: clean_(r[11]).toLowerCase(),
+        name: clean_(r[1]),
+        checkoutUrl: clean_(r[14]),
+        source: 'MANUAL_REVIEW',
+      };
+    }
+  }
+
+  return null;
+}
+
+function commissionExistsForTransaction_(commissionSheet, transactionId) {
+  const id = clean_(transactionId);
+  if (!id || commissionSheet.getLastRow() < 2) return false;
+
+  const values = commissionSheet
+    .getRange(2, 2, commissionSheet.getLastRow() - 1, 1)
+    .getDisplayValues();
+
+  return values.some(r => clean_(r[0]) === id);
+}
+
+function createCommissionForReviewedTransaction_(txSheet, txRow, registrySheet, commissionSheet, affiliate) {
+  const transactionId = clean_(txSheet.getRange(txRow, 2).getDisplayValue());
+  if (!transactionId) throw new Error('Transaction ID kosong.');
+
+  if (commissionExistsForTransaction_(commissionSheet, transactionId)) {
+    txSheet.getRange(txRow, 31).setValue('ALREADY_COMMISSIONED');
+    txSheet.getRange(txRow, 32).setValue(new Date());
+    return 'Transaksi sudah memiliki komisi.';
+  }
+
+  const paymentStatus = clean_(txSheet.getRange(txRow, 4).getDisplayValue()).toUpperCase();
+  const productName = clean_(txSheet.getRange(txRow, 6).getDisplayValue());
+  const amount = Number(txSheet.getRange(txRow, 10).getValue()) || 0;
+
+  const productLooksPanglima =
+    /panglima/i.test(productName) ||
+    amount === PANGLIMA_PRODUCT_PRICE;
+
+  if (paymentStatus !== 'PAID') {
+    throw new Error('Transaksi belum berstatus PAID.');
+  }
+
+  if (!productLooksPanglima) {
+    throw new Error('Transaksi tidak terdeteksi sebagai Paket Panglima.');
+  }
+
+  const now = new Date();
+  const commissionId = Utilities.getUuid();
+
+  txSheet.getRange(txRow, 12).setValue(affiliate.code);
+  txSheet.getRange(txRow, 13).setValue(affiliate.slug);
+  txSheet.getRange(txRow, 14).setValue('ATTRIBUTED');
+  txSheet.getRange(txRow, 15).setValue('MANUAL_REVIEW');
+  txSheet.getRange(txRow, 16).setValue('YES');
+  txSheet.getRange(txRow, 17).setValue(PANGLIMA_COMMISSION_AMOUNT);
+  txSheet.getRange(txRow, 18).setValue('PENDING');
+  txSheet.getRange(txRow, 31).setValue('REVIEWED');
+  txSheet.getRange(txRow, 32).setValue(now);
+
+  commissionSheet.appendRow([
+    commissionId,
+    transactionId,
+    now,
+    affiliate.code,
+    affiliate.slug,
+    affiliate.name,
+    productName || 'Paket Panglima UMKM',
+    amount,
+    PANGLIMA_COMMISSION_RATE,
+    PANGLIMA_COMMISSION_AMOUNT,
+    'PENDING',
+    'UNPAID',
+    '',
+    '',
+    '',
+    'Atribusi disetujui melalui review manual Step 9B.',
+  ]);
+
+  updateRegistryPurchaseSummary_(
+    registrySheet,
+    affiliate.row,
+    amount,
+    PANGLIMA_COMMISSION_AMOUNT,
+    now
+  );
+
+  return `Komisi ${affiliate.code} berhasil dibuat untuk transaksi ${transactionId}.`;
+}
+
+function handleStep9BManualReviewEdit(e) {
+  if (!e || !e.range) return;
+
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== AFFILIATE_TRANSACTIONS_SHEET) return;
+  if (e.range.getRow() < 2) return;
+  if (e.range.getColumn() !== 30) return; // AD = Manual Affiliate Code
+
+  const code = clean_(e.value).toUpperCase();
+  if (!code) return;
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const registry = ss.getSheetByName(SHEET_NAME);
+  const commissionSheet = ss.getSheetByName(AFFILIATE_COMMISSIONS_SHEET);
+
+  if (!registry || !commissionSheet) {
+    throw new Error('Registry / Commission sheet tidak ditemukan.');
+  }
+
+  const affiliate = findAffiliateByCode_(registry, code);
+
+  if (!affiliate) {
+    sheet.getRange(e.range.getRow(), 31).setValue('INVALID_AFFILIATE');
+    return;
+  }
+
+  try {
+    const result = createCommissionForReviewedTransaction_(
+      sheet,
+      e.range.getRow(),
+      registry,
+      commissionSheet,
+      affiliate
+    );
+    sheet.getRange(e.range.getRow(), 20).setValue(result);
+  } catch (err) {
+    sheet.getRange(e.range.getRow(), 31).setValue('ERROR');
+    sheet.getRange(e.range.getRow(), 20).setValue(String(err && err.message ? err.message : err));
+  }
+}
+
+
+function handlePaymentWebhook_(e, p) {
+  const payload = parseWebhookPayload_(e, p);
+
+  const eventType = clean_(pickWebhookValue_(payload, [
+    'event','type','eventType','event_type','name'
+  ])) || 'payment.received';
+
+  const refId = clean_(pickWebhookValue_(payload, [
+    'refId','ref_id','data.refId','data.ref_id',
+    'transaction.refId','transaction.ref_id'
+  ]));
+
+  const transactionId = clean_(pickWebhookValue_(payload, [
+    'transaction_id','transactionId','payment_id','paymentId',
+    'refId','ref_id','id',
+    'data.transaction_id','data.transactionId','data.payment_id','data.paymentId',
+    'data.refId','data.ref_id','data.id'
+  ])) || refId;
+
+  const statusRaw = pickWebhookValue_(payload, [
+    'status','payment_status','paymentStatus',
+    'data.status','data.payment_status','data.paymentStatus'
+  ]);
+  const paymentStatus = normalizePaymentStatus_(statusRaw, eventType);
+
+  const createdAt = clean_(pickWebhookValue_(payload, [
+    'createdAt','created_at','data.createdAt','data.created_at'
+  ]));
+
+  const messageAction = clean_(pickWebhookValue_(payload, [
+    'message.action','data.message.action','action'
+  ]));
+
+  const messageCode = clean_(pickWebhookValue_(payload, [
+    'message.code','data.message.code','code'
+  ]));
+
+  const customerObj = pickWebhookObject_(payload, [
+    'customer','data.customer','buyer','data.buyer'
+  ]) || {};
+
+  const buyerName = clean_(
+    customerObj.name ||
+    customerObj.fullName ||
+    customerObj.full_name ||
+    pickWebhookValue_(payload, [
+      'buyer_name','buyerName','customer_name','customerName',
+      'data.buyer_name','data.customer_name'
+    ])
+  );
+
+  const buyerEmail = clean_(
+    customerObj.email ||
+    pickWebhookValue_(payload, [
+      'buyer_email','buyerEmail','customer_email','customerEmail',
+      'data.buyer_email','data.customer_email'
+    ])
+  );
+
+  const buyerPhone = clean_(
+    customerObj.phone ||
+    customerObj.whatsapp ||
+    pickWebhookValue_(payload, [
+      'buyer_phone','buyerPhone','customer_phone','customerPhone',
+      'data.buyer_phone','data.customer_phone'
+    ])
+  );
+
+  const totalsObj = pickWebhookObject_(payload, [
+    'totals','data.totals','order.totals','data.order.totals'
+  ]) || {};
+
+  const grandTotal = numberWebhookValue_(
+    totalsObj.grandTotal ||
+    totalsObj.grand_total ||
+    pickWebhookValue_(payload, [
+      'grandTotal','grand_total','amount','total','gross_amount','grossAmount',
+      'data.grandTotal','data.grand_total','data.amount','data.total'
+    ])
+  );
+
+  const totalPrice = numberWebhookValue_(
+    totalsObj.totalPrice ||
+    totalsObj.total_price ||
+    pickWebhookValue_(payload, ['totalPrice','total_price','data.totalPrice','data.total_price'])
+  );
+
+  const totalAddon = numberWebhookValue_(
+    totalsObj.totalAddon ||
+    totalsObj.total_addon ||
+    pickWebhookValue_(payload, ['totalAddon','total_addon','data.totalAddon','data.total_addon'])
+  );
+
+  const discount = numberWebhookValue_(
+    totalsObj.discount ||
+    totalsObj.totalDiscount ||
+    totalsObj.total_discount ||
+    pickWebhookValue_(payload, ['discount','data.discount'])
+  );
+
+  const shipping = numberWebhookValue_(
+    totalsObj.shipping ||
+    totalsObj.shippingFee ||
+    totalsObj.shipping_fee ||
+    pickWebhookValue_(payload, ['shipping','shippingFee','shipping_fee','data.shipping'])
+  );
+
+  const amount = grandTotal;
+  const currency = clean_(pickWebhookValue_(payload, [
+    'currency','data.currency','totals.currency','data.totals.currency'
+  ])) || 'IDR';
+
+  const items = extractLynkItems_(payload);
+  const firstItem = items[0] || {};
+  const productId = clean_(
+    firstItem.id ||
+    pickWebhookValue_(payload, [
+      'product_id','productId','data.product_id','data.productId','product.id'
+    ])
+  );
+  const productName = clean_(
+    firstItem.name ||
+    pickWebhookValue_(payload, [
+      'product_name','productName','data.product_name','data.productName','product.name'
+    ])
+  );
+
+  const affiliateCode = clean_(pickWebhookValue_(payload, [
+    'affiliate_code','affiliateCode','referral_code','referralCode',
+    'metadata.affiliate_code','metadata.referral_code',
+    'data.affiliate_code','data.referral_code'
+  ])).toUpperCase();
+
+  const affiliateSlug = clean_(pickWebhookValue_(payload, [
+    'affiliate_slug','affiliateSlug','metadata.affiliate_slug','data.affiliate_slug'
+  ])).toLowerCase();
+
+  const checkoutUrl = clean_(pickWebhookValue_(payload, [
+    'checkout_url','checkoutUrl','product_url','productUrl','url',
+    'data.checkout_url','data.product_url'
+  ]));
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const registry = ss.getSheetByName(SHEET_NAME);
+  if (!registry) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  const sheets = ensureStep9Sheets_(ss);
+  ensureStep9RegistryColumns_(registry);
+  ensureStep9BTransactionColumns_(sheets.tx);
+
+  logRawLynkWebhook_(ss, {
+    receivedAt: new Date(),
+    eventType,
+    refId,
+    messageAction,
+    messageCode,
+    customerLabel: [buyerName, buyerEmail, buyerPhone].filter(Boolean).join(' | '),
+    grandTotal,
+    itemsSummary: summarizeLynkItems_(items),
+    parseResult: transactionId ? 'PARSED' : 'NO_TRANSACTION_ID',
+    rawPayload: payload.raw,
+  });
+
+  if (transactionAlreadyExists_(sheets.tx, transactionId)) {
+    return json_({
+      ok: true,
+      duplicate: true,
+      transactionId,
+      message: 'Transaksi sudah pernah diproses.',
+    });
+  }
+
+  const affiliate = findAffiliateForPayment_(
+    registry,
+    affiliateCode,
+    affiliateSlug,
+    checkoutUrl
+  );
+
+  const attributionStatus = affiliate ? 'ATTRIBUTED' : 'REVIEW';
+  const attributionSource = affiliate ? affiliate.source : 'UNMATCHED';
+
+  const productLooksPanglima =
+    /panglima/i.test(productName) ||
+    amount === PANGLIMA_PRODUCT_PRICE;
+
+  const eligible =
+    Boolean(affiliate) &&
+    paymentStatus === 'PAID' &&
+    productLooksPanglima;
+
+  const commissionAmount = eligible ? PANGLIMA_COMMISSION_AMOUNT : 0;
+  const commissionStatus = eligible ? 'PENDING' : 'NOT_ELIGIBLE';
+  const now = new Date();
+
+  sheets.tx.appendRow([
+    now,
+    transactionId || Utilities.getUuid(),
+    eventType,
+    paymentStatus,
+    productId,
+    productName,
+    buyerName,
+    buyerEmail,
+    buyerPhone,
+    amount,
+    currency,
+    affiliate ? affiliate.code : affiliateCode,
+    affiliate ? affiliate.slug : affiliateSlug,
+    attributionStatus,
+    attributionSource,
+    eligible ? 'YES' : 'NO',
+    commissionAmount,
+    commissionStatus,
+    payload.raw,
+    eligible ? '' : 'Jika transaksi ini milik affiliate, isi kolom Manual Affiliate Code.',
+    now,
+    createdAt,
+    messageAction,
+    messageCode,
+    totalPrice,
+    totalAddon,
+    discount,
+    shipping,
+    JSON.stringify(items),
+    '',
+    affiliate ? 'AUTO_ATTRIBUTED' : 'NEEDS_REVIEW',
+    '',
+  ]);
+
+  if (eligible) {
+    const commissionId = Utilities.getUuid();
+
+    sheets.comm.appendRow([
+      commissionId,
+      transactionId || '',
+      now,
+      affiliate.code,
+      affiliate.slug,
+      affiliate.name,
+      productName || 'Paket Panglima UMKM',
+      amount,
+      PANGLIMA_COMMISSION_RATE,
+      PANGLIMA_COMMISSION_AMOUNT,
+      'PENDING',
+      'UNPAID',
+      '',
+      '',
+      '',
+      '',
+    ]);
+
+    updateRegistryPurchaseSummary_(
+      registry,
+      affiliate.row,
+      amount,
+      PANGLIMA_COMMISSION_AMOUNT,
+      now
+    );
+  }
+
+  return json_({
+    ok: true,
+    transactionId,
+    paymentStatus,
+    attributionStatus,
+    attributionSource,
+    commissionEligible: eligible,
+    commissionAmount,
+  });
+}
+
+function updateRegistryPurchaseSummary_(sheet, row, amount, commissionAmount, now) {
+  ensureStep9RegistryColumns_(sheet);
+
+  const totalPurchasesCell = sheet.getRange(row, 33);
+  const grossRevenueCell = sheet.getRange(row, 34);
+  const earnedCell = sheet.getRange(row, 35);
+  const pendingCell = sheet.getRange(row, 36);
+  const lastPurchaseCell = sheet.getRange(row, 39);
+
+  totalPurchasesCell.setValue((Number(totalPurchasesCell.getValue()) || 0) + 1);
+  grossRevenueCell.setValue((Number(grossRevenueCell.getValue()) || 0) + (Number(amount) || 0));
+  earnedCell.setValue((Number(earnedCell.getValue()) || 0) + commissionAmount);
+  pendingCell.setValue((Number(pendingCell.getValue()) || 0) + commissionAmount);
+  lastPurchaseCell.setValue(now);
+}
+
+
+function setupStep9B() {
+  setupStep9();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ensureLynkRawSheet_(ss);
+
+  const tx = ss.getSheetByName(AFFILIATE_TRANSACTIONS_SHEET);
+  if (!tx) throw new Error('Sheet transaksi tidak ditemukan.');
+
+  ensureStep9BTransactionColumns_(tx);
+
+  const existing = ScriptApp.getProjectTriggers();
+  existing.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'handleStep9BManualReviewEdit') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('handleStep9BManualReviewEdit')
+    .forSpreadsheet(ss)
+    .onEdit()
+    .create();
+
+  Logger.log('Step 9B aktif: Lynk raw payload + manual attribution review siap.');
+  return 'Step 9B aktif: Lynk raw payload + manual attribution review siap.';
+}
+
+function testStep9BLynkPayload() {
+  const mock = {
+    postData: {
+      contents: JSON.stringify({
+        event: 'payment.received',
+        refId: 'LYNK-TEST-' + Date.now(),
+        createdAt: new Date().toISOString(),
+        customer: {
+          name: 'Test Buyer 9B',
+          email: 'test9b@example.com',
+          phone: '628123456789',
+        },
+        totals: {
+          totalPrice: 349000,
+          totalAddon: 0,
+          discount: 0,
+          shipping: 0,
+          grandTotal: 349000,
+        },
+        items: [
+          {
+            id: '9rov84wv3grz',
+            name: 'Paket Panglima UMKM',
+            price: 349000,
+            qty: 1,
+          },
+        ],
+        message: {
+          action: 'payment.received',
+          code: 'SUCCESS',
+        },
+      }),
+    },
+    parameter: {},
+  };
+
+  return handlePaymentWebhook_(mock, {});
+}
+
+
+function setupStep9() {
+  setupStep8();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const registry = ss.getSheetByName(SHEET_NAME);
+  if (!registry) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  ensureStep9Sheets_(ss);
+  ensureStep9RegistryColumns_(registry);
+
+  Logger.log('Step 9 aktif: purchase ledger + commission ledger siap.');
+  return 'Step 9 aktif: purchase ledger + commission ledger siap.';
+}
+
+function testStep9WebhookRatna() {
+  const mock = {
+    postData: {
+      contents: JSON.stringify({
+        event: 'payment.received',
+        transaction_id: 'TEST-RATNA-' + Date.now(),
+        status: 'paid',
+        product_name: 'Paket Panglima UMKM',
+        amount: 349000,
+        currency: 'IDR',
+        buyer_name: 'Test Buyer',
+        buyer_email: 'test@example.com',
+        affiliate_code: 'RAT250',
+      }),
+    },
+    parameter: {},
+  };
+
+  return handlePaymentWebhook_(mock, {});
+}
+
+
+function setupStep8() {
+  setupStep7();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const registrySheet = ss.getSheetByName(SHEET_NAME);
+  if (!registrySheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  ensureAffiliateEventsSheet_(ss);
+  ensureStep8RegistryColumns_(registrySheet);
+
+  Logger.log('Step 8 aktif: tracking PAGE_VIEW dan CHECKOUT_CLICK affiliate siap.');
+  return 'Step 8 aktif: tracking PAGE_VIEW dan CHECKOUT_CLICK affiliate siap.';
+}
+
+
+function setupStep7() {
+  setupStep6C();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  ensureStep6AHeaders_(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const rows = sheet.getRange(2, 1, lastRow - 1, 29).getDisplayValues();
+    rows.forEach((r, i) => {
+      const row = i + 2;
+      const slug = clean_(r[11]).toLowerCase();
+      if (!slug) return;
+      const kitCell = sheet.getRange(row, 29);
+      if (!clean_(kitCell.getDisplayValue())) {
+        kitCell.setValue(`${SITE_URL}/?affiliate=${encodeURIComponent(slug)}&kit=1`);
+      }
+    });
+  }
+
+  Logger.log('Step 7 aktif: Marketing Kit URL siap untuk seluruh affiliate.');
+  return 'Step 7 aktif: Marketing Kit URL siap untuk seluruh affiliate.';
+}
+
+function ensureStep6AHeaders_(sheet) {
+  if (sheet.getMaxColumns() < 29) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 29 - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 21, 1, 9).setValues([[
+    'Approval Email Status',
+    'Approval Email Sent At',
+    'Approval Email Error',
+    'Email Verified',
+    'Email Verification Token',
+    'Email Verified At',
+    'Verification Email Sent At',
+    'Verification Email Error',
+    'Marketing Kit URL',
+  ]]);
+}
+
+/* =========================================================
+   EMAIL VERIFICATION
+   ========================================================= */
+function sendVerificationEmailForRow_(sheet, row) {
+  const data = getAffiliateRowData_(sheet, row);
+
+  if (data.emailVerified === 'YES') return;
+  if (!isValidEmail_(data.email)) throw new Error('Email affiliate tidak valid.');
+
+  let token = data.verificationToken;
+  if (!token) {
+    token = createVerificationToken_();
+    sheet.getRange(row, 25).setValue(token);
+  }
+
+  const serviceUrl = ScriptApp.getService().getUrl();
+  if (!serviceUrl) {
+    throw new Error('Web App belum dideploy. Deploy sebagai Web App terlebih dahulu.');
+  }
+
+  if (MailApp.getRemainingDailyQuota() < 1) {
+    throw new Error('Kuota email Apps Script hari ini sudah habis.');
+  }
+
+  const verifyUrl = `${serviceUrl}?action=verify&token=${encodeURIComponent(token)}`;
+
+  // Subjek sengaja dibuat transaksional, tidak bernuansa promo.
+  const subject = 'Konfirmasi pendaftaran affiliate UMKM Naik Kelas';
+
+  const firstName = escapeHtml_(data.firstName || data.name);
+  const code = escapeHtml_(data.referralCode);
+
+  // HTML dibuat sangat sederhana untuk email verifikasi:
+  // tidak ada banner berat, attachment, emoji, countdown, atau copy penjualan.
+  const htmlBody = `
+    <div style="margin:0;padding:24px;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#202124;">
+      <div style="max-width:560px;margin:0 auto;">
+        <p style="font-size:16px;line-height:1.7;margin:0 0 18px;">Halo ${firstName},</p>
+
+        <p style="font-size:15px;line-height:1.7;margin:0 0 18px;">
+          Kami menerima pendaftaran Anda untuk <strong>Panglima Affiliate Program — UMKM Naik Kelas</strong>.
+        </p>
+
+        <p style="font-size:15px;line-height:1.7;margin:0 0 22px;">
+          Untuk memastikan alamat email ini benar-benar milik Anda, silakan konfirmasi melalui tombol berikut.
+        </p>
+
+        <p style="margin:24px 0;">
+          <a href="${verifyUrl}"
+             style="display:inline-block;background:#b91c1c;color:#ffffff;text-decoration:none;
+                    font-size:15px;font-weight:700;padding:12px 20px;border-radius:8px;">
+            Konfirmasi email
+          </a>
+        </p>
+
+        <p style="font-size:13px;line-height:1.7;color:#5f6368;margin:22px 0 0;">
+          Kode kandidat: <strong>${code}</strong>
+        </p>
+
+        <p style="font-size:13px;line-height:1.7;color:#5f6368;margin:12px 0 0;">
+          Jika tombol tidak dapat dibuka, salin tautan berikut ke browser:<br>
+          <span style="word-break:break-all;">${verifyUrl}</span>
+        </p>
+
+        <p style="font-size:13px;line-height:1.7;color:#5f6368;margin:22px 0 0;">
+          Jika Anda tidak pernah mendaftar, abaikan email ini. Tidak ada tindakan lain yang diperlukan.
+        </p>
+
+        <p style="font-size:13px;line-height:1.7;color:#5f6368;margin:22px 0 0;">
+          UMKM Naik Kelas<br>
+          ${SITE_URL}
+        </p>
+      </div>
+    </div>`;
+
+  const plainBody = `Halo ${data.firstName || data.name},
+
+Kami menerima pendaftaran Anda untuk Panglima Affiliate Program — UMKM Naik Kelas.
+
+Silakan konfirmasi alamat email melalui tautan berikut:
+${verifyUrl}
+
+Kode kandidat: ${data.referralCode}
+
+Jika Anda tidak pernah mendaftar, abaikan email ini.
+
+UMKM Naik Kelas
+${SITE_URL}`;
+
+  const replyTo = REPLY_TO_EMAIL || Session.getEffectiveUser().getEmail();
+
+  // Bila SENDER_ALIAS sudah dikonfigurasi sebagai alias Gmail yang sah,
+  // gunakan GmailApp agar From bisa memakai domain brand.
+  if (SENDER_ALIAS) {
+    const aliases = GmailApp.getAliases();
+    if (!aliases.includes(SENDER_ALIAS)) {
+      throw new Error(
+        `SENDER_ALIAS ${SENDER_ALIAS} belum terdaftar sebagai alias Gmail. ` +
+        'Tambahkan dulu melalui Gmail > Settings > Accounts > Send mail as.'
+      );
+    }
+
+    GmailApp.sendEmail(data.email, subject, plainBody, {
+      htmlBody,
+      name: EMAIL_SENDER_NAME,
+      from: SENDER_ALIAS,
+      replyTo: replyTo || SENDER_ALIAS,
+    });
+  } else {
+    MailApp.sendEmail({
+      to: data.email,
+      subject,
+      body: plainBody,
+      htmlBody,
+      name: EMAIL_SENDER_NAME,
+      replyTo,
+    });
+  }
+
+  sheet.getRange(row, 27).setValue(new Date());
+  sheet.getRange(row, 28).clearContent();
+
+  if (data.status === 'EMAIL_ERROR') {
+    sheet.getRange(row, 14).setValue('PENDING_EMAIL');
+  }
+}
+function verifyAffiliateEmail_(token) {
+  if (!token || token.length < 20) {
+    return verificationPage_(false, 'Tautan verifikasi tidak valid.', 'Silakan gunakan tautan terbaru dari email pendaftaran Anda.');
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Sheet tidak ditemukan.');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return verificationPage_(false, 'Data pendaftaran tidak ditemukan.', 'Silakan daftar kembali.');
+  }
+
+  const tokens = sheet.getRange(2, 25, lastRow - 1, 1).getDisplayValues();
+  let foundRow = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    if (clean_(tokens[i][0]) === token) {
+      foundRow = i + 2;
+      break;
+    }
+  }
+
+  if (foundRow === -1) {
+    return verificationPage_(false, 'Tautan verifikasi tidak ditemukan.', 'Tautan mungkin salah atau data pendaftaran sudah berubah.');
+  }
+
+  const data = getAffiliateRowData_(sheet, foundRow);
+
+  if (data.emailVerified !== 'YES') {
+    sheet.getRange(foundRow, 24).setValue('YES');
+    sheet.getRange(foundRow, 26).setValue(new Date());
+
+    if (data.status === 'PENDING_EMAIL' || data.status === 'EMAIL_ERROR') {
+      sheet.getRange(foundRow, 14).setValue('PENDING');
+    }
+  }
+
+  return verificationPage_(
+    true,
+    'Email berhasil diverifikasi.',
+    `Terima kasih, ${data.firstName || data.name}. Pendaftaran Anda sekarang masuk ke proses review admin.`
+  );
+}
+
+function verificationPage_(success, title, message) {
+  const accent = success ? '#15803d' : '#b91c1c';
+  const label = success ? 'VERIFIKASI BERHASIL' : 'VERIFIKASI BELUM BERHASIL';
+  return HtmlService.createHtmlOutput(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>${escapeHtml_(title)}</title>
+      </head>
+      <body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#171717;">
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;">
+          <div style="width:100%;max-width:560px;background:#fff;border:1px solid #e5e5e5;border-radius:20px;padding:34px;box-sizing:border-box;text-align:center;">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1.4px;color:${accent};">${label}</div>
+            <h1 style="margin:14px 0 10px;font-size:28px;">${escapeHtml_(title)}</h1>
+            <p style="margin:0;color:#525252;line-height:1.7;">${escapeHtml_(message)}</p>
+            <a href="${SITE_URL}/affiliate" style="display:inline-block;margin-top:26px;background:#dc2626;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:999px;">Kembali ke UMKM Naik Kelas</a>
+          </div>
+        </div>
+      </body>
+    </html>`);
+}
+
+// Optional helper: select an affiliate row in the Sheet, then run this manually.
+function resendVerificationEmailForActiveRow() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Sheet tidak ditemukan.');
+
+  const active = sheet.getActiveRange();
+  if (!active || active.getRow() < 2) throw new Error('Pilih salah satu sel pada baris affiliate terlebih dahulu.');
+
+  const row = active.getRow();
+  const data = getAffiliateRowData_(sheet, row);
+  if (data.emailVerified === 'YES') throw new Error('Email pada baris ini sudah terverifikasi.');
+
+  sheet.getRange(row, 25).setValue(createVerificationToken_());
+  sheet.getRange(row, 14).setValue('PENDING_EMAIL');
+  sheet.getRange(row, 28).clearContent();
+  sendVerificationEmailForRow_(sheet, row);
+}
+
+/* =========================================================
+   APPROVAL TRIGGER
+   ========================================================= */
+function handleAffiliateApproval(e) {
+  try {
+    if (!e || !e.range) return;
+
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== SHEET_NAME) return;
+    if (e.range.getRow() < 2) return;
+    if (e.range.getColumn() !== 14) return; // N Status only
+
+    const row = e.range.getRow();
+    const status = clean_(sheet.getRange(row, 14).getDisplayValue()).toUpperCase();
+    if (status !== 'APPROVED') return;
+
+    const data = getAffiliateRowData_(sheet, row);
+    const validCheckout = /^https:\/\//i.test(data.checkoutUrl) && data.checkoutUrl.indexOf('lynk.id') !== -1;
+    const duplicateOkay = data.duplicateFlag === 'OK';
+    const verifiedOkay = data.emailVerified === 'YES';
+    const validEmail = isValidEmail_(data.email);
+
+    if (!verifiedOkay || !validCheckout || !duplicateOkay || !validEmail) {
+      let nextStatus = 'PENDING';
+      let reason = '';
+
+      if (!verifiedOkay) {
+        nextStatus = 'PENDING_EMAIL';
+        reason = 'Email affiliate belum diverifikasi.';
+      } else if (!validCheckout) {
+        nextStatus = 'PENDING';
+        reason = 'Link Lynk Affiliate belum valid.';
+      } else if (!duplicateOkay) {
+        nextStatus = 'REVIEW_DUPLICATE';
+        reason = 'Duplicate Flag belum OK.';
+      } else {
+        nextStatus = 'PENDING';
+        reason = 'Alamat email tidak valid.';
+      }
+
+      sheet.getRange(row, 14).setValue(nextStatus);
+      sheet.getRange(row, 23).setValue(reason);
+      return;
+    }
+
+    const approvalCell = sheet.getRange(row, 16); // P
+    if (!approvalCell.getValue()) approvalCell.setValue(new Date());
+
+    if (data.approvalEmailStatus === 'SENT') return;
+    sendApprovalEmailForRow_(sheet, row);
+  } catch (err) {
+    console.error(err);
+    try {
+      if (e && e.range) {
+        e.range.getSheet().getRange(e.range.getRow(), 23).setValue(String(err && err.message ? err.message : err));
+      }
+    } catch (_) {}
+  }
+}
+
+function sendApprovalEmailForRow_(sheet, row) {
+  const data = getAffiliateRowData_(sheet, row);
+  const statusCell = sheet.getRange(row, 21); // U
+  const sentAtCell = sheet.getRange(row, 22); // V
+  const errorCell = sheet.getRange(row, 23);  // W
+
+  if (data.approvalEmailStatus === 'SENT') return;
+
+  try {
+    statusCell.setValue('SENDING');
+    errorCell.clearContent();
+
+    if (MailApp.getRemainingDailyQuota() < 1) {
+      throw new Error('Kuota pengiriman email Apps Script hari ini sudah habis.');
+    }
+
+    const subject = `Selamat! Affiliate Panglima UMKM Anda Aktif — ${data.referralCode}`;
+    const htmlBody = buildApprovalEmailHtml_(data);
+    const plainBody = buildApprovalEmailText_(data);
+    const kitAttachment = Utilities.newBlob(
+      buildMarketingKitText_(data),
+      'text/plain',
+      `Marketing_Kit_Panglima_${data.referralCode}.txt`
+    );
+
+    const aliases = GmailApp.getAliases();
+    if (!aliases.includes(SENDER_ALIAS)) {
+      throw new Error(
+        `Sender ${SENDER_ALIAS} belum terdaftar di Gmail > Settings > Accounts and Import > Send mail as.`
+      );
+    }
+
+    GmailApp.sendEmail(data.email, subject, plainBody, {
+      htmlBody,
+      name: EMAIL_SENDER_NAME,
+      from: SENDER_ALIAS,
+      replyTo: REPLY_TO_EMAIL || SENDER_ALIAS,
+      attachments: [kitAttachment],
+    });
+
+    statusCell.setValue('SENT');
+    sentAtCell.setValue(new Date());
+    errorCell.clearContent();
+  } catch (err) {
+    statusCell.setValue('ERROR');
+    errorCell.setValue(String(err && err.message ? err.message : err));
+    throw err;
+  }
+}
+
+function buildApprovalEmailHtml_(data) {
+  const page = escapeHtml_(data.affiliatePage);
+  const kit = escapeHtml_(data.marketingKitUrl || `${SITE_URL}/affiliate/kit/${data.slug}`);
+  return `
+  <div style="margin:0;background:#f5f5f5;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#171717;">
+    <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e5e5e5;">
+      <div style="background:#991b1b;padding:30px 28px;color:#fff;">
+        <div style="font-size:13px;letter-spacing:1.5px;font-weight:700;color:#fde68a;">PANGLIMA AFFILIATE PROGRAM</div>
+        <h1 style="margin:10px 0 6px;font-size:28px;">Selamat, ${escapeHtml_(data.firstName || data.name)}! 🎉</h1>
+        <p style="margin:0;color:#fee2e2;line-height:1.6;">Affiliate Anda sudah aktif. Halaman jualan dan kode referral siap digunakan.</p>
+      </div>
+      <div style="padding:28px;">
+        <h2 style="margin:0 0 14px;font-size:20px;">Data Affiliate Anda</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:9px;border-bottom:1px solid #eee;color:#666;">Nama</td><td style="padding:9px;border-bottom:1px solid #eee;font-weight:700;">${escapeHtml_(data.name)}</td></tr>
+          <tr><td style="padding:9px;border-bottom:1px solid #eee;color:#666;">Kode Referral</td><td style="padding:9px;border-bottom:1px solid #eee;font-weight:700;color:#b91c1c;">${escapeHtml_(data.referralCode)}</td></tr>
+          <tr><td style="padding:9px;border-bottom:1px solid #eee;color:#666;">Halaman Jualan</td><td style="padding:9px;border-bottom:1px solid #eee;"><a href="${page}" style="color:#b91c1c;">${page}</a></td></tr>
+          <tr><td style="padding:9px;border-bottom:1px solid #eee;color:#666;">Harga Paket</td><td style="padding:9px;border-bottom:1px solid #eee;font-weight:700;">${PRODUCT_PRICE}</td></tr>
+          <tr><td style="padding:9px;color:#666;">Komisi Dasar</td><td style="padding:9px;font-weight:700;">${COMMISSION_RATE} / ${COMMISSION_PER_SALE}</td></tr>
+        </table>
+
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${page}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:999px;">BUKA HALAMAN AFFILIATE SAYA</a>
+        </div>
+
+        <div style="text-align:center;margin:14px 0 28px;">
+          <a href="${kit}" style="display:inline-block;background:#171717;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:999px;">BUKA MARKETING KIT LENGKAP</a>
+        </div>
+
+        <h2 style="font-size:20px;margin-top:30px;">Marketing Kit Ringkas</h2>
+        <p style="font-size:14px;line-height:1.7;color:#525252;">Gunakan positioning utama: <strong>Diagnosis dulu. Strategi kemudian.</strong></p>
+        <ul style="font-size:14px;line-height:1.8;color:#404040;">
+          <li>Omzet ramai, kas kosong</li>
+          <li>Perang harga</li>
+          <li>Owner bottleneck</li>
+          <li>100 order belum tentu untung</li>
+          <li>Tidak tahu apa yang harus diperbaiki lebih dahulu</li>
+        </ul>
+
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;font-size:14px;line-height:1.7;margin-top:18px;">
+          <strong>Template WhatsApp:</strong><br>
+          Halo Kak, kalau usaha sedang ramai tetapi masih bingung bagian mana yang harus diperbaiki lebih dulu, saya rekomendasikan Paket Panglima UMKM. Fokusnya diagnosis bisnis dan prioritas tindakan 30 hari. Detail: ${page}
+        </div>
+
+        <h3 style="font-size:17px;margin:24px 0 8px;">Bonus Volume</h3>
+        <ul style="font-size:14px;line-height:1.8;color:#404040;">
+          <li>5 penjualan/bulan: + Rp100.000</li>
+          <li>10 penjualan/bulan: + Rp250.000</li>
+          <li>20 penjualan/bulan: + Rp600.000</li>
+        </ul>
+
+        <h3 style="font-size:17px;margin:24px 0 8px;">Aturan Penting</h3>
+        <ul style="font-size:14px;line-height:1.8;color:#404040;">
+          <li>Tidak membuat testimoni palsu atau menjanjikan hasil tertentu.</li>
+          <li>Tidak mengubah harga atau membuat diskon sendiri.</li>
+          <li>Tidak melakukan spam WhatsApp/DM.</li>
+          <li>Komisi hanya dari transaksi yang valid dan berhasil dibayar.</li>
+        </ul>
+
+        <p style="margin-top:24px;font-size:12px;color:#737373;line-height:1.6;">Marketing Kit versi teks juga terlampir pada email ini.</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildApprovalEmailText_(data) {
+  return `Selamat ${data.firstName || data.name}!\n\nAffiliate Panglima UMKM Anda sudah aktif.\n\nKode Referral: ${data.referralCode}\nHalaman Affiliate: ${data.affiliatePage}\nMarketing Kit: ${data.marketingKitUrl || `${SITE_URL}/affiliate/kit/${data.slug}`}\nHarga Paket: ${PRODUCT_PRICE}\nKomisi: ${COMMISSION_RATE} / ${COMMISSION_PER_SALE}\n\nGunakan positioning: Diagnosis dulu. Strategi kemudian.\n\nUMKM Naik Kelas`;
+}
+
+function buildMarketingKitText_(data) {
+  return `PANGLIMA AFFILIATE MARKETING KIT\nUMKM NAIK KELAS\n\nDATA PARTNER\nNama: ${data.name}\nKode Referral: ${data.referralCode}\nHalaman Affiliate: ${data.affiliatePage}\nMarketing Kit: ${data.marketingKitUrl || `${SITE_URL}/affiliate/kit/${data.slug}`}\nHarga Paket: ${PRODUCT_PRICE}\nKomisi Dasar: ${COMMISSION_RATE} / ${COMMISSION_PER_SALE}\n\nPOSITIONING\nDiagnosis dulu. Strategi kemudian.\n\nANGLE KONTEN\n1. Omzet ramai, kas kosong\n2. Perang harga\n3. Owner bottleneck\n4. 100 order belum tentu untung\n5. Tidak tahu apa yang harus diperbaiki lebih dahulu\n\nTEMPLATE WHATSAPP\nHalo Kak, kalau usaha sedang ramai tetapi masih bingung bagian mana yang harus diperbaiki lebih dulu, saya rekomendasikan Paket Panglima UMKM. Fokusnya diagnosis bisnis dan prioritas tindakan 30 hari. Detail: ${data.affiliatePage}\n\nBONUS VOLUME\n5 penjualan: +Rp100.000\n10 penjualan: +Rp250.000\n20 penjualan: +Rp600.000\n\nATURAN\n- Tidak membuat testimoni palsu atau menjanjikan hasil tertentu.\n- Tidak mengubah harga/diskon sendiri.\n- Tidak spam WhatsApp/DM.\n- Komisi hanya dari transaksi valid dan berhasil dibayar.\n`;
+}
+
+/* =========================================================
+   PUBLIC APPROVED REGISTRY
+   ========================================================= */
+function getApprovedAffiliateRegistry_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Sheet tidak ditemukan: ' + SHEET_NAME);
+
+  ensureStep6AHeaders_(sheet);
+
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow > 1
+    ? sheet.getRange(2, 1, lastRow - 1, 29).getDisplayValues()
+    : [];
+
+  const partners = {};
+
+  rows.forEach((r) => {
+    const name = clean_(r[1]);
+    const whatsapp = normalizePhone_(r[3]);
+    const referralCode = clean_(r[10]).toUpperCase();
+    const slug = slugify_(r[11]);
+    const status = clean_(r[13]).toUpperCase();
+    const checkoutUrl = clean_(r[14]);
+    const duplicateFlag = clean_(r[19]).toUpperCase();
+    const emailVerified = clean_(r[23]).toUpperCase();
+
+    const validCheckout = /^https:\/\//i.test(checkoutUrl) && checkoutUrl.indexOf('lynk.id') !== -1;
+
+    if (!name || !whatsapp || !referralCode || !slug) return;
+    if (status !== 'APPROVED') return;
+    if (duplicateFlag !== 'OK') return;
+    if (emailVerified !== 'YES') return;
+    if (!validCheckout) return;
+
+    const affiliatePage = clean_(r[12]) || `${SITE_URL}/?affiliate=${encodeURIComponent(slug)}`;
+    const kitUrl = clean_(r[28]) || `${SITE_URL}/?affiliate=${encodeURIComponent(slug)}&kit=1`;
+
+    partners[slug] = {
+      name,
+      title: 'Partner Panglima UMKM',
+      whatsapp,
+      code: referralCode,
+      affiliatePage,
+      kitUrl,
+      checkoutUrl,
+      status: 'APPROVED',
+      active: true,
+    };
+  });
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    count: Object.keys(partners).length,
+    partners,
+  };
+}
+
+/* =========================================================
+   DATA HELPERS
+   ========================================================= */
+function getAffiliateRowData_(sheet, row) {
+  const r = sheet.getRange(row, 1, 1, 29).getDisplayValues()[0];
+  return {
+    name: clean_(r[1]),
+    firstName: clean_(r[2]),
+    whatsapp: normalizePhone_(r[3]),
+    email: clean_(r[4]).toLowerCase(),
+    social: clean_(r[5]),
+    city: clean_(r[6]),
+    profession: clean_(r[7]),
+    referralCode: clean_(r[10]).toUpperCase(),
+    slug: clean_(r[11]).toLowerCase(),
+    affiliatePage: clean_(r[12]),
+    status: clean_(r[13]).toUpperCase(),
+    checkoutUrl: clean_(r[14]),
+    duplicateFlag: clean_(r[19]).toUpperCase(),
+    approvalEmailStatus: clean_(r[20]).toUpperCase(),
+    approvalEmailSentAt: clean_(r[21]),
+    approvalEmailError: clean_(r[22]),
+    emailVerified: clean_(r[23]).toUpperCase(),
+    verificationToken: clean_(r[24]),
+    emailVerifiedAt: clean_(r[25]),
+    verificationEmailSentAt: clean_(r[26]),
+    verificationEmailError: clean_(r[27]),
+    marketingKitUrl: clean_(r[28]) || `${SITE_URL}/affiliate/kit/${clean_(r[11]).toLowerCase()}`,
+  };
+}
+
+
+/* =========================================================
+   STEP 6C — SENDER DIAGNOSTIC
+   Jalankan manual bila ingin mengecek sender yang dipakai.
+   ========================================================= */
+
+/* =========================================================
+   STEP 6C — TEST SENDER
+   Jalankan manual setelah halo@umkmnaikkelas.id berhasil
+   ditambahkan sebagai "Send mail as" di Gmail.
+   ========================================================= */
+function testHaloSenderStep6C() {
+  const aliases = GmailApp.getAliases();
+  if (!aliases.includes(SENDER_ALIAS)) {
+    throw new Error(
+      `Gmail belum mengenali ${SENDER_ALIAS} sebagai sender alias. ` +
+      'Tambahkan melalui Gmail > Settings > See all settings > Accounts and Import > Send mail as.'
+    );
+  }
+
+  const recipient = Session.getEffectiveUser().getEmail();
+  if (!recipient) throw new Error('Email akun Google pelaksana script tidak dapat dibaca.');
+
+  GmailApp.sendEmail(
+    recipient,
+    'Tes sender UMKM Naik Kelas',
+    'Ini adalah tes pengiriman dari halo@umkmnaikkelas.id.',
+    {
+      htmlBody:
+        '<p>Ini adalah tes pengiriman dari <strong>halo@umkmnaikkelas.id</strong>.</p>' +
+        '<p>Jika kolom From menampilkan alamat tersebut, konfigurasi Step 6C sudah benar.</p>',
+      name: EMAIL_SENDER_NAME,
+      from: SENDER_ALIAS,
+      replyTo: REPLY_TO_EMAIL || SENDER_ALIAS,
+    }
+  );
+
+  return `Email tes dikirim ke ${recipient} dari ${SENDER_ALIAS}`;
+}
+
+function diagnoseEmailSenderStep6C() {
+  const effectiveEmail = Session.getEffectiveUser().getEmail();
+  let aliases = [];
+
+  try {
+    aliases = GmailApp.getAliases();
+  } catch (err) {
+    aliases = ['Tidak dapat membaca alias: ' + String(err && err.message ? err.message : err)];
+  }
+
+  const result = {
+    effectiveEmail,
+    configuredSenderAlias: SENDER_ALIAS || '(belum diisi)',
+    gmailAliases: aliases,
+    remainingDailyQuota: MailApp.getRemainingDailyQuota(),
+    recommendation: SENDER_ALIAS
+      ? 'Pastikan SPF, DKIM, dan DMARC domain sender sudah benar.'
+      : 'Untuk produksi, pertimbangkan sender affiliate@umkmnaikkelas.id sebagai Gmail alias yang sudah diautentikasi.',
+  };
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function createVerificationToken_() {
+  return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+}
+
+function createReferralCode_(firstName, whatsapp) {
+  const letters = removeDiacritics_(firstName)
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 3)
+    .padEnd(3, 'X');
+  const digits = normalizePhone_(whatsapp);
+  const last3 = digits.slice(-3).padStart(3, '0');
+  return letters + last3;
+}
+
+function getFirstName_(name) {
+  return clean_(name).split(/\s+/)[0] || '';
+}
+
+function normalizePhone_(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+  return digits;
+}
+
+function slugify_(value) {
+  return removeDiacritics_(String(value || ''))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'partner';
+}
+
+function removeDiacritics_(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function isValidEmail_(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean_(email));
+}
+
+function clean_(value) {
+  return String(value || '').trim();
+}
+
+function escapeHtml_(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function json_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function jsonOrJsonp_(data, callback) {
+  const safeCallback = String(callback || '').replace(/[^a-zA-Z0-9_.$]/g, '');
+  if (safeCallback) {
+    return ContentService
+      .createTextOutput(`${safeCallback}(${JSON.stringify(data)});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return json_(data);
+}

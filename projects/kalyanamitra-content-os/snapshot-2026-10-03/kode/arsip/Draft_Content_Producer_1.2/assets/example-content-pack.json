@@ -1,0 +1,122 @@
+{
+  "schema_version": "kalyanamitra-content-pack.v1",
+  "package_id": "rk-sample-threads-20260903",
+  "package_revision": 1,
+  "part": {
+    "number": 1,
+    "total": 1,
+    "start_date": "2026-09-03",
+    "end_date": "2026-09-03"
+  },
+  "namespace": "ruang-kalyanamitra",
+  "brand": "Ruang Kalyanamitra",
+  "brand_id": "brand-ruang-kalyanamitra",
+  "platform": "threads",
+  "language": "id-ID",
+  "timezone": "Asia/Jakarta",
+  "content_status": "draft",
+  "publisher_mode": "draft-only",
+  "automatic_publish": false,
+  "human_approval_required": true,
+  "package_risk_flags": ["do-not-publish"],
+  "generated_at": "2026-09-02T17:00:00+07:00",
+  "generator": {
+    "service": "chatgpt",
+    "model": "example-only",
+    "mode": "manual-chat"
+  },
+  "period": {
+    "start_date": "2026-09-03",
+    "end_date": "2026-09-03"
+  },
+  "expected_counts": {
+    "days_total_package": 1,
+    "threads_per_day": 1,
+    "posts_min_per_thread": 6,
+    "posts_max_per_thread": 8,
+    "drafts_total_package": 1,
+    "drafts_in_this_part": 1
+  },
+  "generation_notes": "Example only. Idea Inbox: none. Viral Research Pack: none. Source item and wording still require human Dharma review.",
+  "drafts": [
+    {
+      "external_id": "rk-20260903-01",
+      "publish_date": "2026-09-03",
+      "slot": 1,
+      "content_pillar": "Dharma untuk Kehidupan Sehari-hari",
+      "series": "Dharma di Tempat Kerja",
+      "funnel_goal": "value",
+      "audience_problem": "Percakapan kerja yang memicu emosi terus berputar di pikiran dan mendorong balasan tergesa-gesa.",
+      "title": "Tiga Napas Sebelum Membalas",
+      "promise": "Membantu pembaca menciptakan jeda singkat sebelum bereaksi tanpa menganggap emosi harus ditekan.",
+      "selected_hook": "Pernah menutup chat kerja, tetapi percakapannya masih berputar di kepala?",
+      "hook_rationale": "Situasinya konkret, mudah dikenali, dan membuka jalan menuju praktik perhatian yang aman tanpa menjanjikan hasil instan.",
+      "tradition_scope": "theravada",
+      "traditions_covered": ["theravada"],
+      "source_review_status": "needs-review",
+      "sources": [
+        {
+          "source_id": "src-mn118-sujato",
+          "provider_id": "suttacentral",
+          "title": "Mindfulness of Breathing (MN 118)",
+          "author_teacher_or_translator": "Bhikkhu Sujato",
+          "tradition": "theravada",
+          "source_type": "canonical-text",
+          "url": "https://suttacentral.net/mn118/en/sujato",
+          "locator": "MN 118, the progressive training in mindfulness of breathing; confirm the exact paragraphs used before approval.",
+          "claim_supported": "Mindfulness of breathing is presented as a progressive practice of attending to breathing and experience.",
+          "verification_status": "provider-approved-needs-item-review",
+          "checked_at": null,
+          "checked_by": null
+        }
+      ],
+      "posts": [
+        {
+          "sequence": 1,
+          "role": "hook",
+          "text": "Pernah menutup chat kerja, tetapi percakapannya masih berputar di kepala?",
+          "source_ids": []
+        },
+        {
+          "sequence": 2,
+          "role": "context",
+          "text": "Mata sudah pindah dari layar. Tapi batin belum pindah. Kita menyusun jawaban, membela diri, bahkan menebak maksud orang. Sebenarnya, apa yang sedang terjadi?",
+          "source_ids": []
+        },
+        {
+          "sequence": 3,
+          "role": "dharma-lens",
+          "text": "Dalam MN 118, perhatian pada napas dijelaskan sebagai latihan bertahap. Kita belajar mengenali napas dan pengalaman dengan lebih sadar. Bukan memaksa emosi lenyap dalam beberapa detik.",
+          "source_ids": ["src-mn118-sujato"]
+        },
+        {
+          "sequence": 4,
+          "role": "explanation",
+          "text": "Jeda bukan berarti kalah. Jeda adalah rem sebelum kata-kata meluncur. Pertanyaannya: balasan ini akan memperjelas keadaan, atau hanya memindahkan panas dari pikiran ke layar?",
+          "source_ids": ["src-mn118-sujato"]
+        },
+        {
+          "sequence": 5,
+          "role": "application",
+          "text": "Coba lakukan ini sebelum menekan kirim: letakkan ponsel, rasakan satu tarikan dan satu embusan napas, lalu baca ulang dari sisi penerima. Kalau nadanya masih ingin melukai, simpan dulu sebagai draf.",
+          "source_ids": []
+        },
+        {
+          "sequence": 6,
+          "role": "reflection",
+          "text": "Jadi, poinnya bukan bagaimana kita tidak pernah marah. Cegat sebentar sebelum reaksi menjadi ucapan. Lalu tanyakan: respons apa yang tetap jujur tanpa menambah luka yang tidak perlu?",
+          "source_ids": []
+        },
+        {
+          "sequence": 7,
+          "role": "cta",
+          "text": "Sumber awal: MN 118 di SuttaCentral, terjemahan Bhikkhu Sujato. Periksa teks lengkapnya sebelum menarik kesimpulan. Simpan utas ini untuk saat Anda perlu membuat jeda sebelum membalas.",
+          "source_ids": ["src-mn118-sujato"]
+        }
+      ],
+      "metric_hypothesis": "Pembuka dengan situasi chat kerja yang spesifik dan praktik yang dapat disimpan akan meningkatkan save dan penyelesaian utas dibanding pembuka reflektif yang umum.",
+      "review_required": true,
+      "risk_flags": ["source-item-needs-human-review"]
+    }
+  ]
+}

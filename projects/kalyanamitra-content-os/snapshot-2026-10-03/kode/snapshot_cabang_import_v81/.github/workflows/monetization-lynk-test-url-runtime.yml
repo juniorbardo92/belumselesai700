@@ -1,0 +1,40 @@
+name: Monetization Lynk Test URL Runtime
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-lynk-test-url-runtime.request'
+      - '.github/workflows/monetization-lynk-test-url-runtime.yml'
+
+permissions:
+  contents: read
+
+env:
+  LYNK_WEBHOOK_SECRET: ${{ secrets.LYNK_WEBHOOK_SECRET }}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require marker and secret
+        shell: bash
+        run: |
+          test -f activation/monetization-lynk-test-url-runtime.request
+          test -n "$LYNK_WEBHOOK_SECRET"
+      - name: Probe production Lynk Test URL contract
+        shell: bash
+        run: |
+          payload='{"event":"webhook.test","data":{"message":"runtime contract probe","timestamp":"2026-08-31T00:00:00Z"}}'
+          status=$(curl --silent --show-error --output /tmp/lynk-probe.json --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev/api/monetization/webhooks/lynk?token=${LYNK_WEBHOOK_SECRET}")
+          echo "Lynk Test URL HTTP status: $status"
+          if [ "$status" != "200" ]; then
+            echo "Expected HTTP 200 from production Test URL contract."
+            exit 1
+          fi

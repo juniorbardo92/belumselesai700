@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "panglima-certificate-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-24",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CERTIFIER_GROUP_ID": "01m0paggvpqnk4nm0azvbzg9r2"
+  },
+  "d1_databases": [
+    {
+      "binding": "CERTIFICATE_DB",
+      "database_name": "panglima-certificate-db",
+      "database_id": "REPLACE_RESOURCE_ID"
+    },
+    {
+      "binding": "PANGLIMA_DEVICE_DB",
+      "database_name": "panglima-device-db",
+      "database_id": "REPLACE_RESOURCE_ID"
+    }
+  ],
+  "services": [
+    {
+      "binding": "PANGLIMA_CORE",
+      "service": "panglima-apk-api"
+    }
+  ]
+}

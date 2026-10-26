@@ -1,0 +1,86 @@
+name: Monetization OpenClaw Evidence Readiness
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-openclaw-evidence-readiness.request'
+      - '.github/workflows/monetization-openclaw-evidence-readiness.yml'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require readiness marker and internal credential
+        shell: bash
+        run: |
+          test -f activation/monetization-openclaw-evidence-readiness.request
+          grep -q '^approved=yes$' activation/monetization-openclaw-evidence-readiness.request
+          grep -q '^mode=read-only-no-external-evidence-fabrication$' activation/monetization-openclaw-evidence-readiness.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Verify evidence endpoint is fail-closed
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/evidence-unauth.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/evidence")
+          cat /tmp/evidence-unauth.json
+          test "$code" = '401'
+      - name: Verify privacy-safe evidence read contract
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/evidence.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/openclaw/evidence")
+          cat /tmp/evidence.json
+          test "$code" = '200'
+          node - <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/evidence.json', 'utf8'));
+          if (body.ok !== true) process.exit(1);
+          if (body?.policy?.readOnly !== true) process.exit(1);
+          if (body?.policy?.piiStored !== false) process.exit(1);
+          if (body?.policy?.identifiersStoredAs !== 'sha256-prefix') process.exit(1);
+          if (!Number.isInteger(body?.counts?.total) || body.counts.total < 0) process.exit(1);
+          if (!Number.isInteger(body?.counts?.externalRuntime) || body.counts.externalRuntime < 0) process.exit(1);
+          if (!Array.isArray(body.latest) || !Array.isArray(body.latestExternal)) process.exit(1);
+          console.log(`OPENCLAW_EVIDENCE_TOTAL=${body.counts.total}`);
+          console.log(`OPENCLAW_EXTERNAL_RUNTIME_EVIDENCE=${body.counts.externalRuntime}`);
+          NODE
+      - name: Verify OpenClaw-only Telegram contract remains active
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          runtime_code=$(curl --silent --show-error --output /tmp/runtime.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/telegram/runtime")
+          cat /tmp/runtime.json
+          test "$runtime_code" = '200'
+          grep -q '"transport":"openclaw"' /tmp/runtime.json
+          grep -q '"singleBot":true' /tmp/runtime.json
+          grep -q '"directWebhook":false' /tmp/runtime.json
+          grep -q '"publishing":false' /tmp/runtime.json
+
+          direct_code=$(curl --silent --show-error --output /tmp/direct.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"update_id":1,"message":{"chat":{"id":1},"text":"/revenue"}}' \
+            "$BASE/api/monetization/telegram/webhook")
+          cat /tmp/direct.json
+          test "$direct_code" = '410'
+      - name: Verify OpenClaw manifest remains fail-closed without bearer
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/manifest-unauth.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/telegram-manifest")
+          cat /tmp/manifest-unauth.json
+          test "$code" = '401'

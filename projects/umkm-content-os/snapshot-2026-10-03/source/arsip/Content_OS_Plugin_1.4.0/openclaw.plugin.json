@@ -1,0 +1,56 @@
+{
+  "id": "umkm-content-os",
+  "name": "UMKM Content OS",
+  "description": "Runs UMKM Content OS research and official Meta Threads operations with guarded persistent auto-reply.",
+  "version": "1.4.0",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "contracts": {
+    "tools": [
+      "umkm_topic_research",
+      "umkm_account_audit",
+      "umkm_viral_analyzer",
+      "umkm_threads_own_insights",
+      "umkm_threads_read_replies",
+      "umkm_threads_publish",
+      "umkm_threads_reply",
+      "umkm_threads_recent_posts",
+      "umkm_threads_auto_reply_batch"
+    ]
+  },
+  "toolMetadata": {
+    "umkm_topic_research": {
+      "optional": true
+    },
+    "umkm_account_audit": {
+      "optional": true
+    },
+    "umkm_viral_analyzer": {
+      "optional": true
+    },
+    "umkm_threads_own_insights": {
+      "optional": true
+    },
+    "umkm_threads_read_replies": {
+      "optional": true
+    },
+    "umkm_threads_publish": {
+      "optional": true
+    },
+    "umkm_threads_reply": {
+      "optional": true
+    },
+    "umkm_threads_recent_posts": {
+      "optional": true
+    },
+    "umkm_threads_auto_reply_batch": {
+      "optional": true
+    }
+  }
+}

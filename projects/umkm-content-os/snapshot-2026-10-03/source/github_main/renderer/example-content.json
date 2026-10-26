@@ -1,0 +1,13 @@
+{
+  "title": "Omzet Ramai, Kas Tetap Kosong",
+  "carousel": {
+    "title": "Omzet Ramai, Kas Tetap Kosong",
+    "slides": [
+      { "number": 1, "type": "hook", "headline": "Omzet ramai, tapi kas kosong?", "body": "Jangan buru-buru menyalahkan penjualan." },
+      { "number": 2, "type": "problem", "headline": "Uang bisa tertahan di stok", "body": "Barang yang belum berputar terlihat seperti aset, tetapi belum menjadi kas." },
+      { "number": 3, "type": "insight", "headline": "Margin tipis ikut menggerus kas", "body": "Penjualan naik tidak banyak membantu jika keuntungan per transaksi terlalu kecil." },
+      { "number": 4, "type": "action", "headline": "Mulai dari tiga angka", "body": "Catat margin, stok yang belum berputar, dan pengeluaran kecil setiap minggu." },
+      { "number": 5, "type": "cta", "headline": "Pahami arus kas sebelum mengejar omzet", "body": "Simpan carousel ini dan cek bagian mana yang paling banyak menahan uang usaha Anda." }
+    ]
+  }
+}

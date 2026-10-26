@@ -1,0 +1,353 @@
+name: Monetization v15 Production Gates
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-v15-production-gates.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+env:
+  WORKER_NAME: umkm-monetization-engine
+  BASELINE_VERSION_ID: ec19dcb0-3c61-4b48-a0c1-e9f28cec4397
+  PREVIOUS_CANARY_VERSION_ID: cfb5ad91-3267-4989-921b-7cff7a70ce97
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: monetization-schema-production
+    outputs:
+      candidate_ready: ${{ steps.complete.outputs.candidate_ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require exact activation contract
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          marker='activation/monetization-v15-production-gates.request'
+          test "$(wc -l < "$marker" | tr -d ' ')" = '6'
+          grep -Fxq 'approved=yes' "$marker"
+          grep -Fxq 'scope=monetization-v15-only' "$marker"
+          grep -Fxq 'baseline_version_id=ec19dcb0-3c61-4b48-a0c1-e9f28cec4397' "$marker"
+          grep -Fxq 'previous_canary_version_id=cfb5ad91-3267-4989-921b-7cff7a70ce97' "$marker"
+          grep -Fxq 'confirmation=NORMALIZE_SCHEMA_SECRETS_CANARY_1_PERCENT_RESTORE' "$marker"
+          grep -Fxq 'attempt=2' "$marker"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          mkdir -p "$RUNNER_TEMP/wrangler-empty"
+          echo "WRANGLER_EMPTY_CWD=$RUNNER_TEMP/wrangler-empty" >> "$GITHUB_ENV"
+      - name: Validate exact candidate source
+        run: |
+          npm run types
+          npm run check:all
+      - name: Require the audited 95/5 deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > deployment-before.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('deployment-before.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const actual=versions.map(v=>({id:v.version_id??v.versionId??v.id,percentage:Number(v.percentage??v.traffic_percentage)})).sort((a,b)=>a.id.localeCompare(b.id));
+          const expected=[
+            {id:process.env.BASELINE_VERSION_ID,percentage:95},
+            {id:process.env.PREVIOUS_CANARY_VERSION_ID,percentage:5}
+          ].sort((a,b)=>a.id.localeCompare(b.id));
+          if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error(`foreign deployment or unexpected split: ${JSON.stringify(actual)}`);
+          NODE
+      - name: Normalize exact v14 baseline to 100 percent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$BASELINE_VERSION_ID@100%" --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" --message 'Normalize audited v14 baseline before PR7 v15 gates' -y
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > deployment-normalized.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('deployment-normalized.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!==process.env.BASELINE_VERSION_ID||pct!==100) throw new Error(`baseline normalization failed: ${id}@${pct}`);
+          NODE
+      - name: Apply only allow-listed additive migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 migrations list umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc | tee migrations-before.txt
+          node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('migrations-before.txt','utf8');
+          const pending=[...new Set(text.match(/\b\d{4}_[0-9A-Za-z_-]+\.sql\b/g)??[])].sort();
+          const allowed=new Set(['0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql']);
+          const foreign=pending.filter(name=>!allowed.has(name));
+          if(foreign.length) throw new Error(`refusing unexpected pending migrations: ${foreign}`);
+          fs.writeFileSync('pending-v15.json',JSON.stringify({pending},null,2));
+          NODE
+          PENDING_V15_COUNT=$(node -p "require('./pending-v15.json').pending.length")
+          if [ "$PENDING_V15_COUNT" -gt 0 ]; then
+            npx wrangler d1 migrations apply umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc
+          fi
+          npx wrangler d1 migrations list umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc | tee migrations-after.txt
+          ! grep -Eq '\b[0-9]{4}_[0-9A-Za-z_-]+\.sql\b' migrations-after.txt
+      - name: Verify exact v15 schema contract
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT name FROM d1_migrations WHERE name IN ('0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql') ORDER BY name;" > migration-ledger.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc --command="SELECT name,type FROM sqlite_master WHERE name IN ('monetization_api_rate_limits','monetization_analytics_snapshots','monetization_daily_analytics_v15','monetization_record_quality','monetization_record_quality_history','monetization_quality_history_no_update','monetization_quality_history_no_delete') ORDER BY name;" > schema-objects.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const migrations=JSON.parse(fs.readFileSync('migration-ledger.json','utf8'))?.[0]?.results??[];
+          const expectedMigrations=['0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql'];
+          if(JSON.stringify(migrations.map(x=>x.name))!==JSON.stringify(expectedMigrations)) throw new Error('migration ledger mismatch');
+          const rows=JSON.parse(fs.readFileSync('schema-objects.json','utf8'))?.[0]?.results??[];
+          const expected={monetization_api_rate_limits:'table',monetization_analytics_snapshots:'table',monetization_daily_analytics_v15:'table',monetization_record_quality:'table',monetization_record_quality_history:'table',monetization_quality_history_no_update:'trigger',monetization_quality_history_no_delete:'trigger'};
+          if(rows.length!==Object.keys(expected).length||rows.some(r=>expected[r.name]!==r.type)) throw new Error(`schema object mismatch: ${JSON.stringify(rows)}`);
+          fs.writeFileSync('schema-contract.json',JSON.stringify({ok:true,migrations:expectedMigrations,objects:expected},null,2));
+          NODE
+      - name: Provision candidate-only secrets without deploying traffic
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          QUALITY_TOKEN=$(openssl rand -hex 32)
+          APP_SECRET=$(openssl rand -hex 32)
+          test "$QUALITY_TOKEN" != "$APP_SECRET"
+          printf '{"MONETIZATION_QUALITY_TOKEN":"%s","APP_RECEIPT_SECRET":"%s"}\n' "$QUALITY_TOKEN" "$APP_SECRET" > "$RUNNER_TEMP/v15-secrets.json"
+          TAG="v15-secrets-${GITHUB_SHA::12}-${GITHUB_RUN_ID}"
+          npx wrangler versions secret bulk "$RUNNER_TEMP/v15-secrets.json" --config wrangler.monetization.candidate.jsonc --tag "$TAG" --message 'Provision PR7 v15 candidate-only secrets without traffic' | tee secret-version-output.txt
+          rm -f "$RUNNER_TEMP/v15-secrets.json"
+          npx wrangler versions list --json --config wrangler.monetization.candidate.jsonc > versions-after-secrets.json
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > deployment-after-secrets.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('deployment-after-secrets.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!==process.env.BASELINE_VERSION_ID||pct!==100) throw new Error('secret provisioning changed live traffic');
+          NODE
+      - name: Mark candidate prerequisites ready
+        id: complete
+        run: echo 'candidate_ready=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monetization-v15-prepare-evidence
+          path: |
+            deployment-before.json
+            deployment-normalized.json
+            migrations-before.txt
+            migrations-after.txt
+            pending-v15.json
+            migration-ledger.json
+            schema-objects.json
+            schema-contract.json
+            secret-version-output.txt
+            versions-after-secrets.json
+            deployment-after-secrets.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  canary:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.candidate_ready == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: monetization-canary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Initialize guarded canary
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wrangler-empty"
+          echo "WRANGLER_EMPTY_CWD=$RUNNER_TEMP/wrangler-empty" >> "$GITHUB_ENV"
+          echo 'CANARY_ARMED=false' >> "$GITHUB_ENV"
+      - name: Revalidate candidate and clean baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npm run types
+          npm run check:all
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > canary-before.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('canary-before.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!==process.env.BASELINE_VERSION_ID||pct!==100) throw new Error('baseline changed before canary');
+          NODE
+      - name: Upload hardened candidate without traffic
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          TAG="v15-${GITHUB_SHA::12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "CANDIDATE_TAG=$TAG" >> "$GITHUB_ENV"
+          npx wrangler versions upload --config wrangler.monetization.candidate.jsonc --keep-vars --strict --tag "$TAG" --message "PR7 hardened v15 candidate ${GITHUB_SHA}" | tee candidate-upload.txt
+          npx wrangler versions list --json --config wrangler.monetization.candidate.jsonc > candidate-versions.json
+          CANDIDATE_ID=$(TAG="$TAG" node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('candidate-versions.json','utf8'));
+          const versions=Array.isArray(raw)?raw:(raw.versions??raw.items??[]);
+          const matches=versions.filter(v=>(v.tag??v.annotations?.['workers/tag'])===process.env.TAG);
+          if(matches.length!==1) throw new Error(`candidate tag matches: ${matches.length}`);
+          const id=matches[0]?.id??matches[0]?.version_id??matches[0]?.versionId;
+          if(!id) throw new Error('candidate ID missing');
+          process.stdout.write(id);
+          NODE
+          )
+          echo "CANDIDATE_ID=$CANDIDATE_ID" >> "$GITHUB_ENV"
+          npx wrangler versions view "$CANDIDATE_ID" --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > candidate-bindings.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('candidate-bindings.json','utf8');
+          const required=['APP_RECEIPT_SECRET','MONETIZATION_INGEST_TOKEN','MONETIZATION_QUALITY_TOKEN','LYNK_WEBHOOK_SECRET','DB','CONTENT_OS','MONETIZATION_QUEUE','CF_VERSION_METADATA'];
+          const missing=required.filter(name=>!text.includes(`"${name}"`));
+          if(missing.length) throw new Error(`candidate bindings missing: ${missing}`);
+          NODE
+      - name: Deploy exactly one percent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          echo 'CANARY_ARMED=true' >> "$GITHUB_ENV"
+          npx wrangler versions deploy "$BASELINE_VERSION_ID@99%" "$CANDIDATE_ID@1%" --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" --message 'PR7 v15 guarded 1-percent canary' -y
+      - name: Observe exact candidate for 30 minutes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          : > canary-observations.ndjson
+          for minute in $(seq 0 30); do
+            npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > canary-live.json
+            node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('canary-live.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const map=new Map(versions.map(v=>[v.version_id??v.versionId??v.id,Number(v.percentage??v.traffic_percentage)]));
+          if(versions.length!==2||map.get(process.env.BASELINE_VERSION_ID)!==99||map.get(process.env.CANDIDATE_ID)!==1) throw new Error(`canary split changed: ${JSON.stringify([...map])}`);
+          NODE
+            curl --silent --show-error --fail --max-time 20 --retry 3 --retry-all-errors \
+              -H "Cloudflare-Workers-Version-Overrides: $WORKER_NAME=\"$CANDIDATE_ID\"" \
+              'https://go.umkmnaikkelas.id/api/monetization/version' > candidate-version.json
+            MINUTE="$minute" node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('candidate-version.json','utf8'));
+          if(body.ok!==true||body.version!=='1.1.0-hardening-v15-candidate') throw new Error(`candidate contract mismatch: ${JSON.stringify(body)}`);
+          if(body.runtimeVersion?.id!==process.env.CANDIDATE_ID) throw new Error(`runtime override mismatch: ${body.runtimeVersion?.id}`);
+          fs.appendFileSync('canary-observations.ndjson',JSON.stringify({minute:Number(process.env.MINUTE),at:new Date().toISOString(),version:body.version,runtimeVersionId:body.runtimeVersion.id})+'\n');
+          NODE
+            if [ "$minute" -lt 30 ]; then sleep 60; fi
+          done
+      - name: Restore exact v14 baseline
+        if: ${{ always() }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > restore-before.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('restore-before.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const normalized=versions.map(v=>({id:v.version_id??v.versionId??v.id,pct:Number(v.percentage??v.traffic_percentage??100)}));
+          const ids=new Set(normalized.map(v=>v.id));
+          const clean=normalized.length===1&&normalized[0].id===process.env.BASELINE_VERSION_ID&&normalized[0].pct===100;
+          if(!clean&&(!ids.has(process.env.CANDIDATE_ID)||[...ids].some(id=>id!==process.env.BASELINE_VERSION_ID&&id!==process.env.CANDIDATE_ID))){
+            throw new Error(`foreign deployment detected; refusing overwrite: ${JSON.stringify([...ids])}`);
+          }
+          fs.writeFileSync('restore-needed.txt',clean?'false\n':'true\n');
+          NODE
+          restored=false
+          if [ "$(tr -d '\n' < restore-needed.txt)" = 'false' ]; then
+            restored=true
+          else
+            for attempt in 1 2 3; do
+              if npx wrangler versions deploy "$BASELINE_VERSION_ID@100%" --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" --message 'Automatic exact v14 restore after PR7 v15 canary' -y; then restored=true; break; fi
+            done
+          fi
+          test "$restored" = 'true'
+          for attempt in 1 2 3 4 5 6; do
+            npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name "$WORKER_NAME" > restore-after.json
+            if node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('restore-after.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          process.exit(versions.length===1&&id===process.env.BASELINE_VERSION_ID&&pct===100?0:1);
+          NODE
+            then break; fi
+            sleep 5
+          done
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('restore-after.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||id!==process.env.BASELINE_VERSION_ID||pct!==100) throw new Error('exact baseline restore not verified');
+          fs.writeFileSync('restore-result.json',JSON.stringify({ok:true,baselineVersionId:id,trafficPercent:pct},null,2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monetization-v15-canary-evidence
+          path: |
+            canary-before.json
+            candidate-upload.txt
+            candidate-versions.json
+            candidate-bindings.json
+            canary-live.json
+            candidate-version.json
+            canary-observations.ndjson
+            restore-before.json
+            restore-after.json
+            restore-result.json
+          if-no-files-found: warn
+          retention-days: 14

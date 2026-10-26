@@ -1,0 +1,153 @@
+name: Render carousel preview
+run-name: Render carousel ${{ inputs.render_job_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      content_json:
+        description: "JSON draft dengan carousel.slides (5–9 slide)"
+        required: true
+        type: string
+      upload_to_r2:
+        description: "Upload hasil render ke Cloudflare R2"
+        required: true
+        default: false
+        type: boolean
+      render_job_id:
+        description: "UUID antrean render dari Content OS"
+        required: false
+        default: ""
+        type: string
+      content_item_id:
+        description: "UUID draft dari Content OS"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install renderer browser
+        run: |
+          npm install --no-save playwright@1.52.0
+          npx playwright install --with-deps chromium
+
+      - name: Write content input
+        env:
+          CONTENT_JSON: ${{ inputs.content_json }}
+        run: printf '%s' "$CONTENT_JSON" > /tmp/content.json
+
+      - name: Render and run fail-closed visual QA
+        run: node renderer/render.mjs /tmp/content.json renderer/output
+
+      - name: Upload images to R2
+        if: ${{ inputs.upload_to_r2 }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: umkm-content-media
+          RENDER_JOB_ID: ${{ inputs.render_job_id }}
+          CONTENT_ITEM_ID: ${{ inputs.content_item_id }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID" || (echo "Missing R2_ACCESS_KEY_ID" >&2; exit 1)
+          test -n "$AWS_SECRET_ACCESS_KEY" || (echo "Missing R2_SECRET_ACCESS_KEY" >&2; exit 1)
+          test -n "$R2_ENDPOINT" || (echo "Missing R2_ENDPOINT" >&2; exit 1)
+          test -n "$R2_PUBLIC_BASE_URL" || (echo "Missing R2_PUBLIC_BASE_URL" >&2; exit 1)
+
+          if [[ "$RENDER_JOB_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            prefix="carousel/jobs/${RENDER_JOB_ID}"
+          else
+            prefix="carousel/runs/${GITHUB_RUN_ID}"
+          fi
+          export R2_PREFIX="$prefix"
+
+          while IFS= read -r -d '' file; do
+            key="${file#renderer/output/}"
+            aws s3 cp "$file" "s3://${R2_BUCKET}/${prefix}/${key}" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --region auto \
+              --content-type image/png \
+              --cache-control "public,max-age=31536000,immutable" \
+              --no-progress
+          done < <(find renderer/output -type f -name '*.png' -print0 | sort -z)
+
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root = Path("renderer/output")
+          base = os.environ["R2_PUBLIC_BASE_URL"].rstrip("/")
+          prefix = os.environ["R2_PREFIX"]
+          render_job_id = os.environ.get("RENDER_JOB_ID") or None
+          content_item_id = os.environ.get("CONTENT_ITEM_ID") or None
+          github_run_id = os.environ["GITHUB_RUN_ID"]
+
+          qa = json.loads((root / "qa-report.json").read_text(encoding="utf-8"))
+          if qa.get("passed") is not True:
+              raise SystemExit("Renderer QA did not pass")
+          checks = {
+              (item["platform"], int(item["slide"])): item
+              for item in qa.get("checks", [])
+          }
+
+          images = []
+          for path in sorted(root.rglob("*.png")):
+              platform = path.parent.name
+              slide = int(path.name.split("-", 1)[0])
+              check = checks.get((platform, slide))
+              if not check:
+                  raise SystemExit(f"Missing QA check for {platform} slide {slide}")
+              key = f"{prefix}/{path.relative_to(root).as_posix()}"
+              images.append({
+                  "platform": platform,
+                  "key": key,
+                  "url": f"{base}/{key}",
+                  "width": 1080,
+                  "height": 1350 if platform == "instagram" else 1920,
+                  "sha256": check["sha256"],
+              })
+
+          manifest = {
+              "renderJobId": render_job_id,
+              "contentItemId": content_item_id,
+              "githubRunId": github_run_id,
+              "prefix": prefix,
+              "images": images,
+              "qa": qa,
+          }
+          (root / "manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          aws s3 cp renderer/output/manifest.json "s3://${R2_BUCKET}/${prefix}/manifest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --region auto \
+            --content-type application/json \
+            --cache-control "public,max-age=60" \
+            --no-progress
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: carousel-preview-${{ github.run_id }}
+          path: renderer/output
+          if-no-files-found: error
+          retention-days: 1

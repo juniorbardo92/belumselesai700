@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+  <rect width="320" height="180" rx="18" fill="#1b1612"/>
+  <circle cx="58" cy="90" r="32" fill="#9e1b13" stroke="#c69a3d" stroke-width="3"/>
+  <text x="58" y="101" text-anchor="middle" fill="#f5e9d1" font-family="serif" font-size="28">策</text>
+  <text x="108" y="82" fill="#f5e9d1" font-family="sans-serif" font-size="20" font-weight="700">Content OS</text>
+  <text x="108" y="108" fill="#c69a3d" font-family="sans-serif" font-size="13">R2 health-check asset</text>
+</svg>

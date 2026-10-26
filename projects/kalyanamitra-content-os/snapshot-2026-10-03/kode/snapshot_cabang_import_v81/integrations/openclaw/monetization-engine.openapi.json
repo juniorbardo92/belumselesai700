@@ -1,0 +1,463 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UMKM Naik Kelas Monetization Engine — OpenClaw Tools",
+    "version": "1.1.0",
+    "description": "Read-only operational, Revenue Learning, and bounded asynchronous research tools for the existing OpenClaw runtime. This contract cannot publish content or mutate the publishing pipeline."
+  },
+  "servers": [
+    {
+      "url": "https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev"
+    }
+  ],
+  "security": [
+    {
+      "openClawBearer": []
+    }
+  ],
+  "paths": {
+    "/api/monetization/openclaw/command": {
+      "post": {
+        "operationId": "monetizationCommand",
+        "summary": "Read a monetization operational report",
+        "description": "Returns revenue, contribution profit, top offers, top content, or integration health. Read-only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operational report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/context": {
+      "get": {
+        "operationId": "getRevenueLearningContext",
+        "summary": "Read Revenue Learning context",
+        "description": "Returns aggregated, non-PII Revenue Learning guidance for OpenClaw and Hermes research. Read-only.",
+        "responses": {
+          "200": {
+            "description": "Revenue Learning context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/telegram-manifest": {
+      "get": {
+        "operationId": "getTelegramCommandManifest",
+        "summary": "Read the single-bot Telegram command manifest",
+        "description": "Defines read-only Telegram commands orchestrated by OpenClaw. Direct Telegram to Monetization is disabled.",
+        "responses": {
+          "200": {
+            "description": "Telegram command manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/research": {
+      "post": {
+        "operationId": "startRevenueInformedResearch",
+        "summary": "Start read-only Revenue-informed topic research",
+        "description": "Starts Content OS topic research. A provider timeout is converted into a bounded asynchronous queue job and returned as HTTP 202 with a job ID.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Research completed synchronously",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Research accepted and waiting for the provider; poll the returned job ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid research request"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/research-jobs/{jobId}": {
+      "get": {
+        "operationId": "getResearchJob",
+        "summary": "Read an asynchronous research job",
+        "description": "Returns queued, processing, waiting_provider, ready, or failed state. It never publishes content.",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResearchJobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Research job status and, when ready, Content OS research output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid job ID"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Research job not found"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/acceptance/contract": {
+      "get": {
+        "operationId": "getExternalAcceptanceContract",
+        "summary": "Read the external-runtime evidence contract",
+        "description": "Returns the required evidence fields for runtime, Telegram, and Hermes acceptance.",
+        "responses": {
+          "200": {
+            "description": "Acceptance contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monetization/openclaw/acceptance": {
+      "post": {
+        "operationId": "submitExternalAcceptanceEvidence",
+        "summary": "Submit authenticated external-runtime evidence",
+        "description": "Called only by the real OpenClaw runtime after the stated stage has completed. Evidence is sanitized and idempotent by stage plus correlationId.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RuntimeEvidence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TelegramEvidence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/HermesEvidence"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Evidence recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Duplicate evidence accepted idempotently",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid evidence payload"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "openClawBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque",
+        "description": "Use the existing OPENCLAW_INGRESS_TOKEN. Do not use MONETIZATION_INGEST_TOKEN."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid OpenClaw identity"
+      }
+    },
+    "schemas": {
+      "GenericResponse": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "enum": [
+              "revenue",
+              "profit",
+              "offer",
+              "content",
+              "health"
+            ]
+          },
+          "days": {
+            "type": "integer",
+            "enum": [
+              7,
+              30,
+              90
+            ],
+            "default": 30
+          }
+        }
+      },
+      "ResearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 300
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "default": []
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "threads",
+              "instagram"
+            ],
+            "default": "threads"
+          },
+          "lookbackDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 7
+          },
+          "providerId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "useRevenueLearning": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "ResearchJobId": {
+        "type": "string",
+        "pattern": "^research-job-[0-9a-fA-F-]{36}$"
+      },
+      "RuntimeEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "correlationId",
+          "externalRunId"
+        ],
+        "properties": {
+          "stage": {
+            "const": "runtime"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "externalRunId": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        }
+      },
+      "TelegramEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "correlationId",
+          "externalRunId",
+          "telegramCommand",
+          "transportRunId",
+          "deliveryStatus"
+        ],
+        "properties": {
+          "stage": {
+            "const": "telegram"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "externalRunId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "telegramCommand": {
+            "type": "string",
+            "enum": [
+              "/revenue",
+              "/profit",
+              "/offers",
+              "/content",
+              "/health",
+              "/learning"
+            ]
+          },
+          "transportRunId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "deliveryStatus": {
+            "const": "sent"
+          }
+        }
+      },
+      "HermesEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "correlationId",
+          "externalRunId",
+          "hermesRunId",
+          "researchBriefHash",
+          "resultHash",
+          "resultAccepted"
+        ],
+        "properties": {
+          "stage": {
+            "const": "hermes"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "externalRunId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "hermesRunId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "researchBriefHash": {
+            "$ref": "#/components/schemas/HexHash"
+          },
+          "resultHash": {
+            "$ref": "#/components/schemas/HexHash"
+          },
+          "resultAccepted": {
+            "const": true
+          }
+        }
+      },
+      "Identifier": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 160,
+        "pattern": "^[A-Za-z0-9._:@/-]+$"
+      },
+      "HexHash": {
+        "type": "string",
+        "minLength": 32,
+        "maxLength": 128,
+        "pattern": "^[A-Fa-f0-9]+$"
+      }
+    }
+  }
+}

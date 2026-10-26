@@ -1,0 +1,10 @@
+{
+  "name": "kalyanamitra-lite",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/index.js",
+    "test": "node --test test/*.test.mjs"
+  }
+}

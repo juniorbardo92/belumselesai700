@@ -1,0 +1,8 @@
+Tidak ada diff pada kode produksi Kalyanamitra.
+
+Hash produksi sebelum dan sesudah pekerjaan sama:
+  publisher_kalyanamitra.py 0121951bd9b8f2bbb26de6c2212e816af18e256746619d4a6d3f1d53cb8708e6
+  fingerprint_kalyanamitra.py 319db0062bdfb43c9203d2f5b83727b635309004f3bc90b64149d0f20cd2d930
+
+Satu-satunya kode baru adalah alat baca GET-only (code/repliz_reader.py);
+diff-nya terhadap /dev/null ada di patch-K07-new-file.diff.

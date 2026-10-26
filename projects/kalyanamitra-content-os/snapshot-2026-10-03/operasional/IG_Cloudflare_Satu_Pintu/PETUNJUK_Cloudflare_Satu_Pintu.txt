@@ -1,0 +1,29 @@
+PERBAIKAN MONITOR IG KALYANAMITRA - CLOUDFLARE SATU PINTU UMKM
+
+Salin paket ZIP bernama Kalyanamitra_450_IG_Cloudflare_Satu_Pintu_20260923.zip
+ke folder Downloads, lalu jalankan perintah berikut di PowerShell Windows
+dengan akun Windows yang sama dengan tugas terjadwal:
+
+$folder = Join-Path $env:USERPROFILE 'Downloads\Kalyanamitra450Upload'
+$zip = Join-Path $env:USERPROFILE 'Downloads\Kalyanamitra_450_IG_Cloudflare_Satu_Pintu_20260923.zip'
+Expand-Archive -LiteralPath $zip -DestinationPath $folder -Force
+$script = Join-Path $folder 'Pantau_Kalyanamitra_Threads_ke_IG_Automatis.ps1'
+Get-FileHash -LiteralPath $script -Algorithm SHA256
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -CheckCloudflareAuth
+if ($LASTEXITCODE -ne 0) { throw 'Akses Cloudflare pusat belum berhasil. Jangan jalankan siklus IG.' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script
+
+Skrip membaca kredensial Cloudflare yang sudah disimpan oleh UMKM Content OS:
+1. %LOCALAPPDATA%\UMKM800Importer\cloudflare.xml untuk Cloudflare REST.
+2. %LOCALAPPDATA%\UMKMContentOS\r2-credential.json untuk R2 S3 bila
+   token pertama tidak dapat membaca endpoint REST.
+
+Skrip tidak meminta atau menyimpan ulang secret Cloudflare. Pemeriksaan
+-CheckCloudflareAuth hanya membaca akses bucket, belum membuktikan izin tulis.
+Jangan tempelkan secret ke chat. Pastikan hasil hash skrip sesuai hash yang
+diberikan bersama tautan unduhan terbaru. Pemeriksaan dan tugas Windows harus
+berjalan sebagai pengguna Windows yang menyimpan kredensial UMKM.
+
+Jadwal Threads tidak diubah. Siklus normal hanya menjadwalkan carousel IG
+setelah Threads sukses dan posting Threads memiliki postId. Sebelum membuat
+jadwal baru, skrip memeriksa daftar carousel IG Repliz untuk mencegah duplikat.

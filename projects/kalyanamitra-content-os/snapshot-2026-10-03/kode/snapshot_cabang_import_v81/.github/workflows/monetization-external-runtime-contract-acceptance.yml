@@ -1,0 +1,109 @@
+name: Monetization External Runtime Contract Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-external-runtime-contract-acceptance.request'
+      - '.github/workflows/monetization-external-runtime-contract-acceptance.yml'
+      - 'src/monetization-worker-v9.ts'
+      - 'wrangler.monetization.jsonc'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Require marker and API credential
+        shell: bash
+        run: |
+          test -f activation/monetization-external-runtime-contract-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-external-runtime-contract-acceptance.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+
+      - name: Validate build
+        shell: bash
+        run: |
+          npm run check
+          npm run build:monetization
+
+      - name: Wait for Worker v9 deployment
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          for attempt in $(seq 1 30); do
+            status=$(curl --silent --show-error --output /tmp/runtime.json --write-out '%{http_code}' \
+              -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+              "$BASE/api/monetization/external-acceptance/status" || true)
+            if [ "$status" = '200' ]; then
+              cat /tmp/runtime.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Worker v9 status endpoint did not become ready.'
+          exit 1
+
+      - name: Verify external acceptance status is protected
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/status-unauthorized.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/external-acceptance/status")
+          cat /tmp/status-unauthorized.json
+          test "$code" = '401'
+
+      - name: Verify OpenClaw contract and submission fail closed
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          contract_code=$(curl --silent --show-error --output /tmp/contract.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/acceptance/contract")
+          submit_code=$(curl --silent --show-error --output /tmp/submit.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"stage":"runtime","correlationId":"unauthorized","externalRunId":"unauthorized"}' \
+            "$BASE/api/monetization/openclaw/acceptance")
+          cat /tmp/contract.json
+          cat /tmp/submit.json
+          test "$contract_code" = '401'
+          test "$submit_code" = '401'
+
+      - name: Verify readiness surface without creating fake evidence
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/status.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/external-acceptance/status")
+          cat /tmp/status.json
+          test "$code" = '200'
+          grep -q '"gates"' /tmp/status.json
+          grep -q '"runtime"' /tmp/status.json
+          grep -q '"telegram"' /tmp/status.json
+          grep -q '"hermes"' /tmp/status.json
+
+      - name: Verify direct Telegram webhook remains disabled
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/telegram.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"update_id":1,"message":{"chat":{"id":1},"text":"/revenue"}}' \
+            "$BASE/api/monetization/telegram/webhook")
+          cat /tmp/telegram.json
+          test "$code" = '410'

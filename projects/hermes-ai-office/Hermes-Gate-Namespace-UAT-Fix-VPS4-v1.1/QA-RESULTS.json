@@ -1,0 +1,18 @@
+{
+  "release": "Hermes-Gate-Namespace-UAT-Fix-VPS4-v1.1",
+  "source": "portable test ledger initialized from synthetic checklist baseline, no credentials, no live production data",
+  "tests": {
+    "total": 22,
+    "passed": 22,
+    "failed": 0,
+    "errors": 0
+  },
+  "fixes": [
+    "remove developer-only /mnt/data/gate-local-qa fixture dependency",
+    "repair inverse CHECKSUMS.sha256 mapping that erroneously returned GATE_HASH_MISMATCH",
+    "add read-only installed gate SHA256 diagnosis and fail closed on real integrity deviations"
+  ],
+  "pinned_gate_sha256": "6af7cef012b6aac0e1f95ff625d52682fbff56ee485b50c5062c47f9b7a5300e",
+  "vps4_deployed": false,
+  "production_changed": false
+}

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "policy_name": "Hermes Checklist Quality Gate 81 v1",
+  "mode": "fail_closed_owner_approval",
+  "allow_automatic_close": false,
+  "dependencies_for_close": {
+    "K06": [
+      "K05"
+    ],
+    "B09": [
+      "B10"
+    ],
+    "C04": [
+      "C03"
+    ],
+    "U04": [
+      "U03"
+    ]
+  },
+  "dependencies_for_start": {
+    "K06": [
+      "K05"
+    ],
+    "B09": [
+      "B10"
+    ],
+    "C04": [
+      "C03"
+    ],
+    "U04": [
+      "U03"
+    ]
+  },
+  "production_sensitive_prefixes": [
+    "K",
+    "U",
+    "H",
+    "B",
+    "Q",
+    "S",
+    "C"
+  ],
+  "note": "Dependencies are conservative and scoped only to explicitly defensible relationships. More edges require owner approval. No external Hermes/OpenClaw executor is controlled until it calls the gate before dispatch."
+}

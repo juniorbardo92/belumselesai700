@@ -1,0 +1,33 @@
+{
+  "name": "umkm-content-os-monetization",
+  "version": "1.0.0",
+  "status": "install-ready",
+  "transport": "openclaw",
+  "singleBot": true,
+  "directTelegramWebhook": false,
+  "publishing": false,
+  "defaultBaseUrl": "https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev",
+  "requiredEnvironment": [
+    "UMKM_OPENCLAW_TOKEN"
+  ],
+  "optionalEnvironment": [
+    "UMKM_MONETIZATION_BASE_URL"
+  ],
+  "skills": [
+    "revenue",
+    "profit",
+    "offers",
+    "content",
+    "health",
+    "learning",
+    "research"
+  ],
+  "allowedResearchPlatforms": [
+    "threads",
+    "instagram"
+  ],
+  "evidencePolicy": {
+    "identifiersStoredAs": "sha256-prefix",
+    "piiStored": false
+  }
+}

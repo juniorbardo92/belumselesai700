@@ -1,0 +1,60 @@
+AUDIT — AFFILIATE RESULT-FOCUSED ONLY
+
+BASELINE:
+App_PANGLIMA_RESULT_FOCUSED_ONLY.jsx
+SHA256 baseline : 7dedabd5743a25442bf8893e058881c6117cdc368e80aef7b5ab9d49ed449ce1
+SHA256 hasil    : e196c5dac5b6a4c3b01a85af3356038f8778dde148bf400abcb20cb30cd42344
+
+YANG DIUBAH:
+- Copy dan visual presentation di AffiliatePage /affiliate
+- Hero affiliate
+- Penjelasan hasil Panglima yang dijual
+- Value untuk affiliate
+- Cara kerja (copy/display)
+- Affiliate Kit (copy/display)
+- Cocok untuk siapa (copy/display)
+- Prinsip program (copy/display)
+- Meta title/description /affiliate
+
+YANG TIDAK DIUBAH:
+- AFFILIATE_FORM_ENDPOINT
+- AFFILIATE_LYNK_VALIDATION_ENDPOINT
+- Worker URL
+- normalizePhone()
+- previewReferralCode
+- updateAffiliateForm()
+- handleValidateLynkAffiliate()
+- handleAffiliateSubmit()
+- Payload pendaftaran
+- email verification flow
+- approval admin flow
+- form pendaftaran (byte-identical)
+- validasi Lynk.id (byte-identical)
+- tombol submit/form state (byte-identical)
+- AffiliateReferralCapture
+- AffiliateReferralBridge
+- AffiliateQueryGateway
+- Affiliate personal sales page
+- Affiliate marketing kit page
+- portal/admin affiliate
+- tracking existing
+- /buku
+- /panglima
+- homepage
+- artikel
+- favicon
+- seluruh kode setelah AffiliatePage (byte-identical)
+
+ANGKA PROGRAM TETAP:
+- Harga Panglima Rp349.000
+- Komisi dasar 12% = Rp41.880
+- Bonus volume: 5 / 10 / 20 penjualan sesuai baseline
+Tidak ada perubahan pada rule perhitungan atau sistem pembayaran.
+
+VALIDASI:
+- Logic AffiliatePage sebelum presentation: byte-identical = LULUS
+- Form registration + submit UI: byte-identical = LULUS
+- Semua kode setelah AffiliatePage: byte-identical = LULUS
+
+Ukuran baseline: 297.7 KB
+Ukuran hasil   : 305.3 KB

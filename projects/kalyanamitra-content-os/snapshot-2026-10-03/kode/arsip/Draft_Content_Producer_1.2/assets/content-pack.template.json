@@ -1,0 +1,122 @@
+{
+  "schema_version": "kalyanamitra-content-pack.v1",
+  "package_id": "rk-threads-YYYYMMDD-YYYYMMDD",
+  "package_revision": 1,
+  "part": {
+    "number": 1,
+    "total": 5,
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD"
+  },
+  "namespace": "ruang-kalyanamitra",
+  "brand": "Ruang Kalyanamitra",
+  "brand_id": "brand-ruang-kalyanamitra",
+  "platform": "threads",
+  "language": "id-ID",
+  "timezone": "Asia/Jakarta",
+  "content_status": "draft",
+  "publisher_mode": "draft-only",
+  "automatic_publish": false,
+  "human_approval_required": true,
+  "package_risk_flags": ["do-not-publish"],
+  "generated_at": "YYYY-MM-DDTHH:MM:SS+07:00",
+  "generator": {
+    "service": "chatgpt",
+    "model": "MODEL-NAME",
+    "mode": "manual-chat"
+  },
+  "period": {
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD"
+  },
+  "expected_counts": {
+    "days_total_package": 30,
+    "threads_per_day": 5,
+    "posts_min_per_thread": 6,
+    "posts_max_per_thread": 8,
+    "drafts_total_package": 150,
+    "drafts_in_this_part": 30
+  },
+  "generation_notes": "Canonical JSON is the import source. Record only supplied Idea Inbox and Viral Research Pack top-level IDs here when used. All content requires human review.",
+  "drafts": [
+    {
+      "external_id": "rk-YYYYMMDD-01",
+      "publish_date": "YYYY-MM-DD",
+      "slot": 1,
+      "content_pillar": "Dharma untuk Kehidupan Sehari-hari",
+      "series": "Dharma untuk Kehidupan Sehari-hari",
+      "funnel_goal": "discovery",
+      "audience_problem": "ONE SPECIFIC HUMAN PROBLEM",
+      "title": "THREAD TITLE",
+      "promise": "ONE TRUTHFUL CONTENT PROMISE",
+      "selected_hook": "POST 1 HOOK TEXT",
+      "hook_rationale": "WHY THIS HOOK FITS THE AUDIENCE AND CONTENT",
+      "tradition_scope": "theravada",
+      "traditions_covered": ["theravada"],
+      "source_review_status": "needs-review",
+      "sources": [
+        {
+          "source_id": "src-example-01",
+          "provider_id": "suttacentral",
+          "title": "EXACT SOURCE TITLE",
+          "author_teacher_or_translator": null,
+          "tradition": "theravada",
+          "source_type": "canonical-text",
+          "url": "https://example.invalid/exact-source",
+          "locator": "EXACT SECTION, VERSE, PAGE, OR TIMESTAMP",
+          "claim_supported": "THE EXACT CLAIM THIS SOURCE SUPPORTS",
+          "verification_status": "provider-approved-needs-item-review",
+          "checked_at": null,
+          "checked_by": null
+        }
+      ],
+      "posts": [
+        {
+          "sequence": 1,
+          "role": "hook",
+          "text": "POST 1 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": []
+        },
+        {
+          "sequence": 2,
+          "role": "context",
+          "text": "POST 2 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": []
+        },
+        {
+          "sequence": 3,
+          "role": "dharma-lens",
+          "text": "POST 3 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": ["src-example-01"]
+        },
+        {
+          "sequence": 4,
+          "role": "explanation",
+          "text": "POST 4 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": ["src-example-01"]
+        },
+        {
+          "sequence": 5,
+          "role": "application",
+          "text": "POST 5 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": []
+        },
+        {
+          "sequence": 6,
+          "role": "practice",
+          "text": "POST 6 TEXT, MAXIMUM 500 CHARACTERS",
+          "source_ids": []
+        },
+        {
+          "sequence": 7,
+          "role": "cta",
+          "text": "FINAL SOURCE NOTE OR ETHICAL CTA, MAXIMUM 500 CHARACTERS",
+          "source_ids": ["src-example-01"]
+        }
+      ],
+      "metric_hypothesis": "ONE TESTABLE HYPOTHESIS TIED TO THE FUNNEL GOAL",
+      "review_required": true,
+      "risk_flags": []
+    }
+  ]
+}

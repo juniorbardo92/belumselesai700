@@ -1,0 +1,215 @@
+name: Monetization Code-Only Deploy
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-code-deploy.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require code-only deployment marker
+        shell: bash
+        run: |
+          test -f activation/monetization-code-deploy.request
+          grep -q '^release=monetization-engine-final-v1.0$' activation/monetization-code-deploy.request
+          grep -q '^approved=yes$' activation/monetization-code-deploy.request
+          grep -q '^mode=code-only-no-migration$' activation/monetization-code-deploy.request
+      - name: Validate existing and Monetization builds
+        run: |
+          npm run types
+          npm run check
+          npm run build
+          npm run build:monetization
+      - name: Provision Monetization operational Queue idempotently
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler queues list | tee /tmp/queues.txt
+          if ! grep -q 'umkm-monetization-ops' /tmp/queues.txt; then
+            npx wrangler queues create umkm-monetization-ops --message-retention-period-secs 86400
+          fi
+      - name: Deploy isolated Monetization Engine code only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.monetization.jsonc
+      - name: Verify Monetization health
+        shell: bash
+        run: |
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code=$(curl --silent --output /tmp/status.json --write-out '%{http_code}' "$BASE_URL/api/monetization/status" || true)
+            if [ "$code" = '200' ] && grep -q '"ok":true' /tmp/status.json; then ok=1; break; fi
+            sleep 2
+          done
+          cat /tmp/status.json
+          test "$ok" = '1'
+      - name: Verify first-party go domain and tracked redirect runtime
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+        run: |
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          GO_URL='https://go.umkmnaikkelas.id'
+          SLUG="domain-acceptance-${GITHUB_RUN_ID}"
+          VISITOR="domain-visitor-${GITHUB_RUN_ID}"
+          SESSION="domain-session-${GITHUB_RUN_ID}"
+
+          # Cleanup only isolated domain-acceptance artifacts from earlier interrupted runs.
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="DELETE FROM monetization_touchpoints WHERE event_id IN (SELECT e.id FROM monetization_events e JOIN monetization_tracked_links l ON l.id=e.tracked_link_id WHERE l.slug LIKE 'domain-acceptance-%'); DELETE FROM monetization_events WHERE tracked_link_id IN (SELECT id FROM monetization_tracked_links WHERE slug LIKE 'domain-acceptance-%'); DELETE FROM monetization_tracked_links WHERE slug LIKE 'domain-acceptance-%';"
+
+          domain_ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            code=$(curl --silent --output /tmp/domain-status.json --write-out '%{http_code}' "$GO_URL/api/monetization/status" || true)
+            if [ "$code" = '200' ] && grep -q '"ok":true' /tmp/domain-status.json; then domain_ok=1; break; fi
+            sleep 4
+          done
+          echo "Custom-domain health response:"
+          cat /tmp/domain-status.json || true
+          test "$domain_ok" = '1'
+
+          create_code=$(curl --silent --show-error --output /tmp/domain-link.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "{\"slug\":\"${SLUG}\",\"destinationUrl\":\"https://example.com/first-party-domain-acceptance\",\"platform\":\"acceptance\",\"metadata\":{\"acceptance\":\"first-party-domain\",\"runId\":\"${GITHUB_RUN_ID}\"}}" \
+            "$BASE_URL/api/monetization/links")
+          cat /tmp/domain-link.json
+          test "$create_code" = '201'
+          LINK_ID=$(node -e "const d=JSON.parse(require('fs').readFileSync('/tmp/domain-link.json','utf8')); if(!d?.link?.id) process.exit(1); process.stdout.write(d.link.id)")
+
+          redirect_code=$(curl --silent --show-error --output /dev/null --dump-header /tmp/domain-headers.txt --write-out '%{http_code}' \
+            --max-redirs 0 \
+            -H "X-Visitor-Id: $VISITOR" \
+            -H "X-Session-Id: $SESSION" \
+            -H "User-Agent: monetization-domain-acceptance/${GITHUB_RUN_ID}" \
+            "$GO_URL/go/$SLUG" || true)
+          cat /tmp/domain-headers.txt
+          test "$redirect_code" = '302'
+          tr -d '\r' < /tmp/domain-headers.txt | grep -Fqi 'location: https://example.com/first-party-domain-acceptance'
+
+          click_found=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT COUNT(*) total FROM monetization_events WHERE tracked_link_id='${LINK_ID}' AND event_type='click' AND visitor_id='${VISITOR}';" > /tmp/domain-click.txt
+            if grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9]' /tmp/domain-click.txt; then click_found=1; break; fi
+            sleep 2
+          done
+          cat /tmp/domain-click.txt
+          test "$click_found" = '1'
+
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="DELETE FROM monetization_touchpoints WHERE event_id IN (SELECT id FROM monetization_events WHERE tracked_link_id='${LINK_ID}'); DELETE FROM monetization_events WHERE tracked_link_id='${LINK_ID}'; DELETE FROM monetization_tracked_links WHERE id='${LINK_ID}';"
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT COUNT(*) total FROM monetization_tracked_links WHERE id='${LINK_ID}';" > /tmp/domain-cleanup.txt
+          cat /tmp/domain-cleanup.txt
+          grep -Eq '"total"[[:space:]]*:[[:space:]]*0' /tmp/domain-cleanup.txt
+      - name: Verify protected API and Lynk webhook protection
+        shell: bash
+        env:
+          MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+        run: |
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          unauth=$(curl --silent --output /tmp/unauth.json --write-out '%{http_code}' "$BASE_URL/api/monetization/summary?days=30" || true)
+          test "$unauth" = '401'
+          auth=$(curl --silent --output /tmp/auth.json --write-out '%{http_code}' -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" "$BASE_URL/api/monetization/summary?days=30" || true)
+          test "$auth" = '200'
+          lynk=$(curl --silent --output /tmp/lynk.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"id":"probe"}' "$BASE_URL/api/monetization/webhooks/lynk" || true)
+          cat /tmp/lynk.json
+          test "$lynk" = '401'
+      - name: Verify Queue producer to consumer runtime
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+        run: |
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          CORRELATION="queue-acceptance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          code=$(curl --silent --output /tmp/queue.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" -H 'Content-Type: application/json' --data "{\"correlationId\":\"${CORRELATION}\"}" "$BASE_URL/api/monetization/queue/probe" || true)
+          cat /tmp/queue.json
+          test "$code" = '202'
+          found=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT COUNT(*) total FROM monetization_integration_logs WHERE provider='system' AND operation='queue_probe' AND correlation_id='${CORRELATION}' AND status='success';" > /tmp/queue-d1.txt
+            if grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9]' /tmp/queue-d1.txt; then found=1; break; fi
+            sleep 2
+          done
+          cat /tmp/queue-d1.txt
+          test "$found" = '1'
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="DELETE FROM monetization_integration_logs WHERE provider='system' AND operation='queue_probe' AND correlation_id='${CORRELATION}';"
+      - name: Reprocess and verify existing real Lynk attribution when requested
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! grep -q '^reprocess_real_lynk_attribution=yes$' activation/monetization-code-deploy.request; then
+            echo 'Real Lynk attribution reprocess not requested for this deployment.'
+            exit 0
+          fi
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          REVENUE_ID='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f'
+          TRANSACTION_ID='668833d4c96fc82031a7c9d448b51848'
+          TOUCH_ID='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd'
+
+          code=$(curl --silent --show-error --output /tmp/reprocess.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE_URL/api/monetization/attribution/reprocess/$REVENUE_ID")
+          cat /tmp/reprocess.json
+          test "$code" = '200'
+          node - "$TOUCH_ID" <<'NODE'
+          const fs=require('fs');
+          const touch=process.argv[2];
+          const body=JSON.parse(fs.readFileSync('/tmp/reprocess.json','utf8'));
+          const a=body?.attribution??{};
+          if(body?.ok!==true) throw new Error('reprocess response not ok');
+          if(a.attribution_status!=='attributed') throw new Error(`expected attributed, got ${a.attribution_status}`);
+          if(a.model!=='last_touch') throw new Error(`expected last_touch, got ${a.model}`);
+          if(a.first_event_id!==touch||a.last_event_id!==touch) throw new Error('touch event mismatch in reprocess response');
+          NODE
+
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT revenue_event_id,attribution_status,model,first_event_id,last_event_id,metadata_json FROM monetization_attributions WHERE revenue_event_id='${REVENUE_ID}';" > /tmp/real-attribution.json
+          cat /tmp/real-attribution.json
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT operation,status,correlation_id,metadata_json,created_at FROM monetization_integration_logs WHERE provider='lynk' AND operation='bounded_attribution' AND correlation_id='${TRANSACTION_ID}' ORDER BY datetime(created_at) DESC LIMIT 1;" > /tmp/real-evidence.json
+          cat /tmp/real-evidence.json
+
+          node - "$TOUCH_ID" <<'NODE'
+          const fs=require('fs');
+          const touch=process.argv[2];
+          const unwrap=(path)=>{const x=JSON.parse(fs.readFileSync(path,'utf8')); return x?.[0]?.results?.[0]??null};
+          const a=unwrap('/tmp/real-attribution.json');
+          if(!a) throw new Error('attribution row missing');
+          if(a.attribution_status!=='attributed'||a.model!=='last_touch') throw new Error('D1 attribution not attributed/last_touch');
+          if(a.first_event_id!==touch||a.last_event_id!==touch) throw new Error('D1 touch event mismatch');
+          const m=JSON.parse(a.metadata_json||'{}');
+          if(m.evidenceVersion!=='1.1'||m.candidateCount!==1||m.clockAnchor!=='revenue_created_at_utc'||m.touchReusePrevented!==true) throw new Error('D1 attribution metadata evidence mismatch');
+          const e=unwrap('/tmp/real-evidence.json');
+          if(!e||e.status!=='success') throw new Error('bounded evidence success row missing');
+          const em=JSON.parse(e.metadata_json||'{}');
+          if(em.evidenceVersion!=='1.1'||em.candidateCount!==1||em.clockAnchor!=='revenue_created_at_utc'||em.touchReusePrevented!==true) throw new Error('bounded evidence metadata mismatch');
+          NODE

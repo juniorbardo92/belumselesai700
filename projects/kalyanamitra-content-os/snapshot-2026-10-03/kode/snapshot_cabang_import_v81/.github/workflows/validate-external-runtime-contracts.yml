@@ -1,0 +1,56 @@
+name: Validate External Runtime Contracts
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'integrations/openclaw/**'
+      - 'integrations/hermes/**'
+      - 'docs/openclaw-telegram-hermes-activation-v1.md'
+      - 'scripts/validate-external-runtime-contracts.mjs'
+      - 'src/monetization-external-acceptance.ts'
+      - 'src/monetization-worker-v9.ts'
+      - 'src/monetization-worker-v10.ts'
+      - 'src/monetization-worker-v11.ts'
+      - 'src/monetization-worker-v12.ts'
+      - 'wrangler.monetization.jsonc'
+      - '.github/workflows/validate-external-runtime-contracts.yml'
+  pull_request:
+    paths:
+      - 'integrations/openclaw/**'
+      - 'integrations/hermes/**'
+      - 'docs/openclaw-telegram-hermes-activation-v1.md'
+      - 'scripts/validate-external-runtime-contracts.mjs'
+      - 'src/monetization-external-acceptance.ts'
+      - 'src/monetization-worker-v9.ts'
+      - 'src/monetization-worker-v10.ts'
+      - 'src/monetization-worker-v11.ts'
+      - 'src/monetization-worker-v12.ts'
+      - 'wrangler.monetization.jsonc'
+      - '.github/workflows/validate-external-runtime-contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validate TypeScript and Worker build
+        run: |
+          npm run types
+          npm run check
+          npm run build:monetization
+
+      - name: Validate OpenClaw, Telegram, Hermes contracts
+        run: node scripts/validate-external-runtime-contracts.mjs

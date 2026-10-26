@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "interface": "telegram",
+  "orchestrator": "openclaw",
+  "singleBot": true,
+  "readOnly": true,
+  "publishing": false,
+  "toolContract": "./monetization-engine.openapi.json",
+  "commands": [
+    {
+      "command": "/revenue",
+      "operationId": "monetizationCommand",
+      "arguments": {
+        "query": "revenue",
+        "days": 30
+      },
+      "replyTemplate": "Revenue 30 hari: gross, net, contribution profit, dan jumlah transaksi."
+    },
+    {
+      "command": "/profit",
+      "operationId": "monetizationCommand",
+      "arguments": {
+        "query": "profit",
+        "days": 30
+      },
+      "replyTemplate": "Contribution profit 30 hari dan komponen utamanya."
+    },
+    {
+      "command": "/offers",
+      "operationId": "monetizationCommand",
+      "arguments": {
+        "query": "offer",
+        "days": 30
+      },
+      "replyTemplate": "Top offer berdasarkan contribution profit."
+    },
+    {
+      "command": "/content",
+      "operationId": "monetizationCommand",
+      "arguments": {
+        "query": "content",
+        "days": 30
+      },
+      "replyTemplate": "Top content berdasarkan contribution profit."
+    },
+    {
+      "command": "/health",
+      "operationId": "monetizationCommand",
+      "arguments": {
+        "query": "health",
+        "days": 30
+      },
+      "replyTemplate": "Status integrasi dan error terbaru tanpa data rahasia."
+    },
+    {
+      "command": "/learning",
+      "operationId": "getRevenueLearningContext",
+      "arguments": {},
+      "replyTemplate": "Insight Revenue Learning dan arahan research berikutnya."
+    }
+  ],
+  "acceptance": {
+    "afterSuccessfulReply": {
+      "operationId": "submitExternalAcceptanceEvidence",
+      "payload": {
+        "stage": "telegram",
+        "correlationId": "${correlation_id}",
+        "externalRunId": "${openclaw_run_id}",
+        "telegramCommand": "${telegram_command}",
+        "transportRunId": "${telegram_delivery_id}",
+        "deliveryStatus": "sent"
+      }
+    }
+  },
+  "security": {
+    "bearerEnvironmentVariable": "OPENCLAW_INGRESS_TOKEN",
+    "neverLog": [
+      "Authorization",
+      "OPENCLAW_INGRESS_TOKEN",
+      "TELEGRAM_BOT_TOKEN",
+      "TELEGRAM_WEBHOOK_SECRET"
+    ]
+  }
+}

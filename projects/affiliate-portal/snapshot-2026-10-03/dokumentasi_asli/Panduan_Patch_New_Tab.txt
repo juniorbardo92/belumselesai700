@@ -1,0 +1,31 @@
+PERBAIKAN AFFILIATE REFERRAL BRIDGE — HANYA BUG TAB ARTIKEL
+
+GEJALA:
+- Tombol Panglima target="_blank" membuka halaman checkout baru dengan benar.
+- Tetapi tab artikel asal ikut berubah ke checkout affiliate seperti lynk.id/mulaiplantbased/....
+
+AKAR MASALAH:
+- AffiliateReferralBridge melakukan `await loadAffiliateRegistry()` sebelum `event.preventDefault()`.
+- Browser tidak menunggu Promise event handler.
+- Akibatnya default link target="_blank" sudah berjalan, kemudian kode async melanjutkan
+  `window.location.href = destination` pada tab artikel asal.
+
+PERBAIKAN:
+- Deteksi checkout Panglima dan `preventDefault()` dilakukan sinkron SEBELUM async.
+- Untuk target="_blank", dibuat tab baru langsung dari klik pengguna.
+- Setelah registry selesai, URL checkout resmi/affiliate dimuat DI TAB BARU tersebut.
+- Tab artikel asal tetap berada di halaman artikel.
+- Jika referral tidak valid / registry gagal, tab baru memakai link Panglima original.
+
+TIDAK DIUBAH:
+- sistem affiliate
+- masa referral 30 hari
+- registry dinamis
+- attribution affiliate
+- tracking Meta / GA
+- partner data
+- portal
+- artikel
+- program profesi
+- checkout Panglima
+- route lain

@@ -1,0 +1,103 @@
+name: Real Attributed Learning Loop
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/real-attributed-learning-loop.request'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate real-chain request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f activation/real-attributed-learning-loop.request
+          grep -q '^mode=real-existing-revenue-only$' activation/real-attributed-learning-loop.request
+          grep -q '^revenue_event_id=rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f$' activation/real-attributed-learning-loop.request
+          grep -q '^transaction_id=668833d4c96fc82031a7c9d448b51848$' activation/real-attributed-learning-loop.request
+          grep -q '^touch_event_id=evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd$' activation/real-attributed-learning-loop.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Verify existing real content to revenue attribution chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT id,transaction_id,source,status,gross_amount,content_item_id,campaign_id,offer_id FROM monetization_revenue_events WHERE id='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f';" > /tmp/revenue.json
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT revenue_event_id,attribution_status,model,first_event_id,last_event_id FROM monetization_attributions WHERE revenue_event_id='rev-8c89beb3-25e4-48e5-85ae-45947ea9f64f';" > /tmp/attribution.json
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT id,event_type,tracked_link_id,content_item_id,campaign_id,offer_id,platform FROM monetization_events WHERE id='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd';" > /tmp/touch.json
+          cat /tmp/revenue.json
+          cat /tmp/attribution.json
+          cat /tmp/touch.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const unwrap=(p)=>{const x=JSON.parse(fs.readFileSync(p,'utf8')); return x?.[0]?.results?.[0]??null};
+          const r=unwrap('/tmp/revenue.json');
+          const a=unwrap('/tmp/attribution.json');
+          const t=unwrap('/tmp/touch.json');
+          if(!r||!a||!t) throw new Error('real chain row missing');
+          if(r.transaction_id!=='668833d4c96fc82031a7c9d448b51848'||r.source!=='lynk'||r.status!=='confirmed'||Number(r.gross_amount)!==5000) throw new Error('real revenue mismatch');
+          if(r.content_item_id!=='50a75269-32b4-4fe4-9272-33594c890de7'||r.campaign_id!=='cam-lynk-prod-20260901'||r.offer_id!=='off-lynk-prod-6a866261') throw new Error('real revenue direct mapping mismatch');
+          if(a.attribution_status!=='attributed'||a.model!=='last_touch'||a.first_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd'||a.last_event_id!=='evt-561f5070-32f2-4679-8baa-bbdc5ebb0ddd') throw new Error('real attribution mismatch');
+          if(t.event_type!=='affiliate_click'||t.tracked_link_id!=='lnk-lynk-prod-20260901'||t.content_item_id!==r.content_item_id||t.campaign_id!==r.campaign_id||t.offer_id!==r.offer_id||t.platform!=='instagram') throw new Error('real tracked touch mismatch');
+          NODE
+      - name: Run Revenue Learning on current production ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/learning.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE_URL/api/monetization/learning/run?days=30")
+          cat /tmp/learning.json
+          test "$code" = '201'
+          node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('/tmp/learning.json','utf8'));
+          if(body?.ok!==true||body?.skipped===true) throw new Error('learning run skipped or failed');
+          if(Number(body?.storedInsights??0)<1) throw new Error('no learning insight stored');
+          const o=body?.datasetOverview??{};
+          if(Number(o.revenue_events??0)<1||Number(o.contents??0)<1||Number(o.gross??0)<5000) throw new Error('learning dataset does not include real revenue chain');
+          NODE
+      - name: Verify persisted Revenue Learning result
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT status,metadata_json,created_at FROM monetization_integration_logs WHERE provider='deepseek' AND operation='revenue_learning' ORDER BY id DESC LIMIT 1;" > /tmp/learning-log.json
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --yes --json \
+            --command="SELECT COUNT(*) AS active_insights,MAX(created_at) AS latest_insight_at FROM monetization_learning_insights WHERE brand_id='brand-umkm-naik-kelas' AND status='active';" > /tmp/insights.json
+          cat /tmp/learning-log.json
+          cat /tmp/insights.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const unwrap=(p)=>{const x=JSON.parse(fs.readFileSync(p,'utf8')); return x?.[0]?.results?.[0]??null};
+          const l=unwrap('/tmp/learning-log.json');
+          const i=unwrap('/tmp/insights.json');
+          if(!l||l.status!=='success') throw new Error('latest learning integration log not successful');
+          const m=JSON.parse(l.metadata_json||'{}');
+          if(Number(m.stored??0)<1) throw new Error('latest learning log stored no insights');
+          if(!i||Number(i.active_insights??0)<1) throw new Error('no active learning insight persisted');
+          NODE

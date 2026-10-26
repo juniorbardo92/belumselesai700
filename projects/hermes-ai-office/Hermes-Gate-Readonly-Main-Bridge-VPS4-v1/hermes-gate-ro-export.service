@@ -1,0 +1,13 @@
+[Unit]
+Description=Hermes Checklist Quality Gate read-only status export
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/ubuntu/.local/libexec/hermes-gate-ro/export_gate_snapshot.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hermes-checklist-ro/live
+ProtectHome=read-only
+UMask=0027

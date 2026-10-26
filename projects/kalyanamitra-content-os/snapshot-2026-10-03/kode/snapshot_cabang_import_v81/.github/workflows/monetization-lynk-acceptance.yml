@@ -1,0 +1,99 @@
+name: Monetization Lynk Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-lynk-acceptance.request'
+      - 'scripts/monetization-lynk-acceptance.mjs'
+      - '.github/workflows/monetization-lynk-acceptance.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+  LYNK_WEBHOOK_SECRET: ${{ secrets.LYNK_WEBHOOK_SECRET }}
+  BASE_URL: https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require Lynk acceptance marker and secrets
+        shell: bash
+        run: |
+          test -f activation/monetization-lynk-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-lynk-acceptance.request
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$MONETIZATION_INGEST_TOKEN"
+          test -n "$LYNK_WEBHOOK_SECRET"
+      - name: Bind Lynk webhook secret to production Worker
+        shell: bash
+        run: printf '%s' "$LYNK_WEBHOOK_SECRET" | npx wrangler secret put LYNK_WEBHOOK_SECRET --config wrangler.monetization.jsonc
+      - name: Select clean existing content
+        id: content
+        shell: bash
+        run: |
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT c.id FROM content_items c LEFT JOIN content_monetization cm ON cm.content_item_id=c.id WHERE c.brand_id='brand-umkm-naik-kelas' AND cm.content_item_id IS NULL ORDER BY c.created_at ASC LIMIT 1;" > /tmp/content.txt
+          CONTENT_ID=$(node -e "const fs=require('fs');const s=fs.readFileSync('/tmp/content.txt','utf8');const m=s.match(/\"id\"\s*:\s*\"([^\"]+)\"/);if(!m)process.exit(2);process.stdout.write(m[1])")
+          echo "content_id=$CONTENT_ID" >> "$GITHUB_OUTPUT"
+      - name: Generate isolated Lynk acceptance tag
+        id: ids
+        shell: bash
+        run: echo "run_tag=lynk-acceptance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - name: Run Lynk webhook acceptance
+        env:
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+        run: node scripts/monetization-lynk-acceptance.mjs
+      - name: Save Lynk acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monetization-lynk-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: monetization-lynk-acceptance-report.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Cleanup isolated Lynk acceptance records
+        if: always()
+        shell: bash
+        env:
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+          ACCEPTANCE_CONTENT_ID: ${{ steps.content.outputs.content_id }}
+        run: |
+          if [ -z "$RUN_TAG" ]; then exit 0; fi
+          SQL="PRAGMA foreign_keys=ON;
+          DELETE FROM monetization_reconciliation_items WHERE reconciliation_run_id IN (SELECT id FROM monetization_reconciliation_runs WHERE metadata_json LIKE '%${RUN_TAG}%');
+          DELETE FROM monetization_reconciliation_runs WHERE metadata_json LIKE '%${RUN_TAG}%';
+          DELETE FROM monetization_integration_logs WHERE provider='lynk' AND correlation_id='${RUN_TAG}-trx';
+          DELETE FROM monetization_attributions WHERE revenue_event_id IN (SELECT id FROM monetization_revenue_events WHERE transaction_id='${RUN_TAG}-trx');
+          DELETE FROM monetization_revenue_events WHERE transaction_id='${RUN_TAG}-trx';
+          DELETE FROM monetization_provider_mappings WHERE id='${RUN_TAG}-mapping';
+          DELETE FROM monetization_events WHERE idempotency_key='${RUN_TAG}:touch' OR visitor_id='${RUN_TAG}-visitor';
+          DELETE FROM content_monetization WHERE content_item_id='${ACCEPTANCE_CONTENT_ID}' AND metadata_json LIKE '%${RUN_TAG}%';
+          DELETE FROM monetization_campaigns WHERE id='${RUN_TAG}-campaign';
+          DELETE FROM monetization_offers WHERE id='${RUN_TAG}-offer';"
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="$SQL"
+      - name: Verify Lynk cleanup and secret remains active
+        if: always()
+        shell: bash
+        env:
+          RUN_TAG: ${{ steps.ids.outputs.run_tag }}
+        run: |
+          if [ -z "$RUN_TAG" ]; then exit 0; fi
+          npx wrangler d1 execute umkm-content-os-db --remote --config wrangler.monetization.jsonc --command="SELECT (SELECT COUNT(*) FROM monetization_offers WHERE id='${RUN_TAG}-offer') offers,(SELECT COUNT(*) FROM monetization_campaigns WHERE id='${RUN_TAG}-campaign') campaigns,(SELECT COUNT(*) FROM monetization_events WHERE visitor_id='${RUN_TAG}-visitor') events,(SELECT COUNT(*) FROM monetization_revenue_events WHERE transaction_id='${RUN_TAG}-trx') revenues;" | tee /tmp/cleanup.txt
+          for key in offers campaigns events revenues; do grep -Eq "\"${key}\"[[:space:]]*:[[:space:]]*0([,}]|$)" /tmp/cleanup.txt; done
+          raw='{"event":"payment.success","data":{"transaction_id":"post-cleanup-probe"}}'
+          code=$(curl --silent --output /tmp/probe.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$raw" "$BASE_URL/api/monetization/webhooks/lynk" || true)
+          test "$code" = '401'

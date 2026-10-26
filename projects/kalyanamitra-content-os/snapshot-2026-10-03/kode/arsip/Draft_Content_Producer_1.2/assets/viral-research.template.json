@@ -1,0 +1,69 @@
+{
+  "schema_version": "kalyanamitra-viral-research.v1",
+  "research_id": "rk-viral-20260902-20260908",
+  "generated_at": "2026-09-02T09:00:00+07:00",
+  "research_period": {
+    "start_date": "2026-09-02",
+    "end_date": "2026-09-08"
+  },
+  "region": "Indonesia",
+  "platform": "threads",
+  "language": "id-ID",
+  "timezone": "Asia/Jakarta",
+  "research_mode": "user-supplied-only",
+  "query_summary": [
+    "Template only: replace with the actual queries and sources inspected during the research run."
+  ],
+  "research_risk_flags": [
+    "do-not-treat-as-fact",
+    "template-example-only"
+  ],
+  "human_review_required": true,
+  "candidates": [
+    {
+      "trend_id": "trend-notifikasi-001",
+      "topic": "Kelelahan akibat terlalu banyak notifikasi",
+      "summary": "Contoh struktur kandidat untuk menunjukkan cara mencatat tren. Ini bukan hasil riset aktual dan tidak boleh digunakan sebagai bukti bahwa topiknya sedang viral.",
+      "observed_at": "2026-09-02T09:00:00+07:00",
+      "expires_at": "2026-09-09T09:00:00+07:00",
+      "audience_problem": "Sulit berhenti memeriksa ponsel dan merasa perhatian terus terpecah.",
+      "possible_dharma_bridge": "Kemungkinan sudut tentang perhatian, perasaan, dorongan, dan jeda sebelum bereaksi; sumber Dharma tetap harus dipilih terpisah.",
+      "tradition_hint": "general-buddhist",
+      "time_sensitive": true,
+      "sources": [
+        {
+          "source_id": "trend-src-template-001",
+          "source_type": "user-provided",
+          "title": "Contoh sumber—ganti dengan bukti yang benar-benar diperiksa",
+          "url": null,
+          "observed_at": "2026-09-02T09:00:00+07:00",
+          "observed_signal": "Tidak ada sinyal aktual; record ini hanya menunjukkan struktur field.",
+          "metric_value": null,
+          "source_status": "user-supplied-needs-review",
+          "privacy_status": "user-owned"
+        }
+      ],
+      "score_components": {
+        "recency": 3,
+        "velocity": 1,
+        "audience_fit": 5,
+        "dharma_bridge": 4,
+        "source_quality": 1,
+        "novelty": 3,
+        "risk_penalty": 2
+      },
+      "viral_opportunity_score": 15,
+      "risk_level": "medium",
+      "risk_notes": [
+        "Template example only; replace every observation before editorial use."
+      ],
+      "decision": "monitor",
+      "usage": "inspiration-only",
+      "review_status": "needs-review",
+      "reviewed_at": null,
+      "reviewed_by": null,
+      "status": "active",
+      "tags": ["digital", "perhatian", "template"]
+    }
+  ]
+}

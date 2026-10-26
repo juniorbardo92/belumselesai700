@@ -1,0 +1,62 @@
+[
+  {
+    "path": "assets/app.js",
+    "apk_sha256": "0898f63a833b30728e95ef8882daa977896e9f3866d697251b5c6ce7d92703ef",
+    "branch_has_file": true,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/config.js",
+    "apk_sha256": "0b4c027e88ef9c2528a01b4e2f320c9e8b91fdfc621f645d7c360e435f0ceb50",
+    "branch_has_file": true,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/index.html",
+    "apk_sha256": "de7c9994ea19b8f75dc29cdcdb1902df780f79b6b073cccdf2fa43426a21dc63",
+    "branch_has_file": true,
+    "same_bytes_as_branch": true
+  },
+  {
+    "path": "assets/modules/insurance-workbook.pmod",
+    "apk_sha256": "be2de8dc05a01f4b217e08c1d93574a4bb8e39ca56404b7425f1b073dc0aee3e",
+    "branch_has_file": true,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/modules/mlm-workbook.pmod",
+    "apk_sha256": "f60551ec2129cd0fdf88cc4a81dad61a824269dcc42a8baaa2e2e5e140af264b",
+    "branch_has_file": true,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/modules/property-workbook.pmod",
+    "apk_sha256": "aa990dbe94ae19122af9d8f185ed6a0c553efa64d68af6f0023f1f699bb41a98",
+    "branch_has_file": true,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/specialist-workbook.css",
+    "apk_sha256": "3bec93a7754771b998d441aa133cbc4383978a3f85af30ae0f1dbdff1b9cfbca",
+    "branch_has_file": false,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/specialist-workbook.html",
+    "apk_sha256": "d448339d9eda5d493bc7517d40becafdbf900e8c454dac3ff65b1c187e4ca691",
+    "branch_has_file": false,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/specialist-workbook.js",
+    "apk_sha256": "adca361dd6beef30174a4a6e7186aa7c10cff8c01915d54baedabc8eaec97c8d",
+    "branch_has_file": false,
+    "same_bytes_as_branch": false
+  },
+  {
+    "path": "assets/styles.css",
+    "apk_sha256": "e8d24eee225e45549b3d04a481410d74dcb755bcfc41477b5ec7ed277b6c4f26",
+    "branch_has_file": true,
+    "same_bytes_as_branch": true
+  }
+]

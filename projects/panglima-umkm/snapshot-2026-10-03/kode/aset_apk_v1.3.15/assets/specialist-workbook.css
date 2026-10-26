@@ -1,0 +1,50 @@
+.specialist-shell .page { padding-top: 23px; }
+.specialist-shell .page-title { font-size: 26px; line-height: 1.22; }
+.specialist-shell .card { padding: 18px; }
+.specialist-shell .chapter-eyebrow { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.specialist-shell .chapter-principle { font-size: 23px; line-height: 1.4; margin: 14px 0; }
+.specialist-shell .chapter-field { border-top: 1px solid var(--border); padding: 14px 0; }
+.specialist-shell .chapter-field:last-child { padding-bottom: 0; }
+.specialist-shell .chapter-field summary { cursor: pointer; font-weight: 750; line-height: 1.5; font-size: 15px; min-height: 48px; }
+.specialist-shell .chapter-field summary::marker { color: var(--maroon); }
+.specialist-shell .answer-options { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.specialist-shell .answer { min-height: 48px; font-size: 14px; }
+.specialist-shell .chapter-shortcut { margin-top: 12px; }
+.specialist-shell .status-line { color: var(--muted); font-size: 12px; margin: 10px 2px; }
+.specialist-shell .weekly-card { margin-bottom: 16px; }
+.specialist-shell .weekly-card details { border-top: 1px solid var(--border); padding: 10px 0; }
+.specialist-shell .weekly-card summary { cursor: pointer; padding: 7px 0; font-weight: 700; }
+.specialist-shell .checked-label { display: flex; align-items: flex-start; gap: 10px; min-height: 48px; padding: 10px 0; border-top: 1px solid var(--border); line-height: 1.5; }
+.specialist-shell .checked-label input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--maroon); }
+.specialist-shell .back-link { margin-bottom: 17px; }
+.specialist-shell .chapter-field .field { margin: 8px 0 13px; }
+.specialist-shell .chapter-field .field:last-child { margin-bottom: 4px; }
+.specialist-shell .ready { color: var(--green); }
+.specialist-shell .bottom-nav { -webkit-tap-highlight-color: transparent; }
+body.specialist-dark {
+  color-scheme: dark;
+  --ink: #f3efeb;
+  --muted: #c6bab4;
+  --surface: #121212;
+  --white: #1e1e1e;
+  --border: #47403c;
+  --green-soft: #18382e;
+  --gold-soft: #49391f;
+  --yellow-soft: #48381c;
+  --red-soft: #462427;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+body.specialist-dark .specialist-shell .answer,
+body.specialist-dark .specialist-shell .field input,
+body.specialist-dark .specialist-shell .field textarea {
+  color: var(--ink);
+  background: #292624;
+  border-color: var(--border);
+}
+body.specialist-dark .specialist-shell .answer.active { color: #fff; background: var(--maroon); }
+body.specialist-dark .specialist-shell .progress-track { background: #4a403c; }
+body.specialist-dark .specialist-shell .card { border-color: var(--border); }
+body.specialist-dark .specialist-shell .button { color: #fff; }
+body.specialist-dark .specialist-shell .button.secondary,
+body.specialist-dark .specialist-shell .result-box .value,
+body.specialist-dark .specialist-shell .nav-button.active { color: #f5bec4; }

@@ -1,0 +1,64 @@
+{
+  "version": "1.0.0",
+  "assistantRole": "research",
+  "orchestrator": "openclaw",
+  "sourceOperationId": "getRevenueLearningContext",
+  "readOnly": true,
+  "publishing": false,
+  "input": {
+    "required": [
+      "correlationId",
+      "researchBrief",
+      "revenueLearningContext"
+    ],
+    "privacy": {
+      "allow": [
+        "aggregated revenue",
+        "aggregated profit",
+        "content performance",
+        "offer performance",
+        "platform performance",
+        "learning insight",
+        "research guidance"
+      ],
+      "deny": [
+        "customer email",
+        "customer phone",
+        "customer name",
+        "shipping address",
+        "raw payment payload",
+        "secret",
+        "token"
+      ]
+    }
+  },
+  "output": {
+    "required": [
+      "researchSummary",
+      "recommendedTopics",
+      "evidence",
+      "confidence",
+      "limitations"
+    ],
+    "constraints": {
+      "recommendedTopicsMax": 10,
+      "confidenceMin": 0,
+      "confidenceMax": 1,
+      "mustSeparateFactFromInference": true,
+      "mustNotPublish": true
+    }
+  },
+  "acceptance": {
+    "hashAlgorithm": "SHA-256",
+    "submitOperationId": "submitExternalAcceptanceEvidence",
+    "payload": {
+      "stage": "hermes",
+      "correlationId": "${correlation_id}",
+      "externalRunId": "${openclaw_run_id}",
+      "hermesRunId": "${hermes_run_id}",
+      "researchBriefHash": "${sha256_research_brief}",
+      "resultHash": "${sha256_hermes_result}",
+      "resultAccepted": true
+    }
+  }
+}

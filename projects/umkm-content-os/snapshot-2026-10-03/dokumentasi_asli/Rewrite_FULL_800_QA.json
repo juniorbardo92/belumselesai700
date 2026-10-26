@@ -1,0 +1,74 @@
+{
+  "status": "PASS",
+  "scope": "800 utas; 100 pilot dipertahankan dan 700 utas tersisa ditulis ulang",
+  "totals": {
+    "threads": 800,
+    "posts": 7200,
+    "pilot_threads_preserved": 100,
+    "rewritten_threads": 700,
+    "visuals": 160,
+    "soft_selling": 120
+  },
+  "post_distribution": {
+    "8": 267,
+    "9": 266,
+    "10": 267
+  },
+  "unique_openers": 800,
+  "unique_questions": 800,
+  "exact_duplicate_posts": 0,
+  "one_question_per_thread": 800,
+  "max_post_length": 340,
+  "min_post_length": 30,
+  "lowercase_post_starts": 0,
+  "legacy_phrase_hits": {
+    "dalam pendekatan": 0,
+    "untuk sudut": 0,
+    "mulai uji": 0,
+    "simpan kerangka": 0,
+    "konteks ini perlu diterjemahkan": 0,
+    "akar masalah yang perlu diuji melalui": 0
+  },
+  "product_threads_with_approved_route": 120,
+  "product_thread_count": 120,
+  "non_product_threads_with_url": 0,
+  "links_before_final_post": 0,
+  "repeated_20_word_ngrams": 975,
+  "max_20_word_ngram_frequency": 15,
+  "max_opener_five_word_start_frequency": 16,
+  "topics_with_distinct_backlog_architectures": 100,
+  "backlog_adjacent_same_architecture": 0,
+  "pilot_content_signature_sha256": "973386624f5c97241e7b36d734f01fd287c2bc6ca593e0eebd310f5fc95fbfa1",
+  "backlog_generator_qa": {
+    "scope": "700 utas tersisa; 100 utas pilot dipertahankan byte-for-byte",
+    "thread_count": 700,
+    "post_count": 6301,
+    "post_distribution": {
+      "8": 233,
+      "9": 233,
+      "10": 234
+    },
+    "unique_openers": 700,
+    "unique_questions": 700,
+    "unique_fingerprints": 700,
+    "exact_duplicate_posts_full_package": 0,
+    "one_question_per_thread": 700,
+    "max_post_length": 340,
+    "min_post_length": 59,
+    "average_topic_mentions": 1.28,
+    "max_topic_mentions": 2,
+    "topic_mention_outliers": [],
+    "legacy_phrase_hits": {
+      "dalam pendekatan": 0,
+      "untuk sudut": 0,
+      "mulai uji": 0,
+      "simpan kerangka": 0,
+      "konteks ini perlu diterjemahkan": 0,
+      "akar masalah yang perlu diuji melalui": 0
+    },
+    "links_outside_final_post": 0,
+    "product_threads_with_approved_url": 104,
+    "product_thread_count": 104,
+    "non_product_threads_with_url": 0
+  }
+}

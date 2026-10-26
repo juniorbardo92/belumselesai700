@@ -1,0 +1,43 @@
+{
+  "id": "umkm-content-registry",
+  "name": "UMKM Content Registry",
+  "description": "Menyimpan dan membaca draft permanen serta menjalankan workflow draft-only yang terjaga.",
+  "version": "1.2.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "baseUrl",
+      "ingressToken"
+    ],
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "minLength": 12,
+        "description": "URL Worker UMKM Content OS tanpa slash di akhir."
+      },
+      "ingressToken": {
+        "type": "string",
+        "minLength": 16,
+        "description": "Token ingress OpenClaw; tidak pernah dikirim ke model atau dikembalikan oleh tool."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 5000,
+        "maximum": 30000,
+        "default": 20000
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "umkm_content_draft_create",
+      "umkm_content_draft_get",
+      "umkm_content_repliz_accounts",
+      "umkm_content_workflow"
+    ]
+  }
+}

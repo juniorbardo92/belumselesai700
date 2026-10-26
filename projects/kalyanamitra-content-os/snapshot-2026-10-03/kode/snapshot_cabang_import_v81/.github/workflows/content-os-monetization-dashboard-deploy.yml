@@ -1,0 +1,170 @@
+name: Content OS Monetization Dashboard Deploy
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/content-os-monetization-dashboard-deploy.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require additive code-only marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f activation/content-os-monetization-dashboard-deploy.request
+          marker='activation/content-os-monetization-dashboard-deploy.request'
+          test "$(wc -l < "$marker" | tr -d ' ')" = '5'
+          grep -Fxq 'approved=yes' "$marker"
+          grep -Fxq 'mode=code-only-no-migration' "$marker"
+          grep -Fxq 'access=preserve-existing-and-validate-jwt' "$marker"
+          grep -Fxq 'confirmation=DEPLOY_MONETIZATION_DASHBOARD_ACCESS_HARDENING' "$marker"
+          grep -Fxq 'attempt=2' "$marker"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          mkdir -p "$RUNNER_TEMP/wrangler-empty"
+          echo "WRANGLER_EMPTY_CWD=$RUNNER_TEMP/wrangler-empty" >> "$GITHUB_ENV"
+      - name: Validate Content OS and Monetization builds
+        run: |
+          npm run types
+          npm run check:all
+      - name: Capture exact Content OS baseline
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os > content-os-before.json
+          PREVIOUS_VERSION_ID=$(node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('content-os-before.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const id=versions[0]?.version_id??versions[0]?.versionId??versions[0]?.id;
+          const pct=Number(versions[0]?.percentage??versions[0]?.traffic_percentage??100);
+          if(versions.length!==1||!id||pct!==100) throw new Error(`Content OS baseline is not one version at 100%: ${JSON.stringify(versions)}`);
+          process.stdout.write(id);
+          NODE
+          )
+          echo "PREVIOUS_VERSION_ID=$PREVIOUS_VERSION_ID" >> "$GITHUB_ENV"
+      - name: Upload dashboard candidate without traffic
+        run: |
+          set -euo pipefail
+          TAG="dashboard-jwt-${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "DASHBOARD_CANDIDATE_TAG=$TAG" >> "$GITHUB_ENV"
+          npx wrangler versions upload --config wrangler.jsonc --keep-vars --tag "$TAG" --message "Monetization dashboard Access hardening ${GITHUB_SHA}" | tee content-os-upload.txt
+          npx wrangler versions list --json --config wrangler.jsonc > content-os-versions.json
+          CANDIDATE_ID=$(TAG="$TAG" node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('content-os-versions.json','utf8'));
+          const rows=Array.isArray(raw)?raw:(raw.items??raw.versions??[]);
+          const matches=rows.filter(v=>(v.annotations?.['workers/tag']??v.tag)===process.env.TAG);
+          if(matches.length!==1) throw new Error(`dashboard candidate tag matches: ${matches.length}`);
+          const id=matches[0].id??matches[0].version_id??matches[0].versionId;
+          if(!id) throw new Error('dashboard candidate ID missing');
+          process.stdout.write(id);
+          NODE
+          )
+          echo "DASHBOARD_CANDIDATE_ID=$CANDIDATE_ID" >> "$GITHUB_ENV"
+          npx wrangler versions view "$CANDIDATE_ID" --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os > content-os-candidate.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('content-os-candidate.json','utf8');
+          const required=['DB','MEDIA','ACCESS_TEAM_DOMAIN','ACCESS_POLICY_AUD'];
+          const missing=required.filter(name=>!text.includes(`\"${name}\"`));
+          if(missing.length) throw new Error(`dashboard candidate bindings missing: ${missing}`);
+          NODE
+      - name: Deploy guarded dashboard candidate
+        id: deploy
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$DASHBOARD_CANDIDATE_ID@100%" --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os --message 'Deploy Monetization dashboard Access JWT hardening' -y
+          echo 'DASHBOARD_DEPLOYED=true' >> "$GITHUB_ENV"
+      - name: Verify existing Cloudflare Access gate remains on Content OS
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://umkm-content-os.ruang-belajar-mandiri01.workers.dev'
+          for path in '/api/status' '/monetization'; do
+            code=$(curl --silent --show-error --output /tmp/access-body.txt --dump-header /tmp/access-headers.txt --write-out '%{http_code}' "$BASE$path" || true)
+            echo "$path unauthenticated HTTP $code"
+            cat /tmp/access-headers.txt
+            test "$code" != '200'
+            if [ "$code" = '302' ] || [ "$code" = '303' ]; then
+              grep -Eiq '^location: .*cloudflareaccess\.com' /tmp/access-headers.txt
+            else
+              test "$code" = '401' -o "$code" = '403'
+            fi
+          done
+          curl --silent --show-error --fail --max-time 20 --retry 3 --retry-all-errors \
+            'https://yellow-snow-4e04.cloudflareaccess.com/cdn-cgi/access/certs' > access-certs.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('access-certs.json','utf8'));
+          if(!Array.isArray(body.keys)||body.keys.length<1) throw new Error('Cloudflare Access JWKS unavailable');
+          NODE
+      - name: Verify isolated Monetization Worker remains healthy
+        shell: bash
+        run: |
+          code=$(curl --silent --show-error --output /tmp/mon-status.json --write-out '%{http_code}' 'https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev/api/monetization/status')
+          cat /tmp/mon-status.json
+          test "$code" = '200'
+          grep -q '"ok":true' /tmp/mon-status.json
+      - name: Verify first-party tracked-link domain remains healthy
+        shell: bash
+        run: |
+          code=$(curl --silent --show-error --output /tmp/go-status.json --write-out '%{http_code}' 'https://go.umkmnaikkelas.id/api/monetization/status')
+          cat /tmp/go-status.json
+          test "$code" = '200'
+          grep -q '"ok":true' /tmp/go-status.json
+      - name: Record successful dashboard deployment
+        run: |
+          printf '{"ok":true,"previousVersionId":"%s","candidateVersionId":"%s","accessJwtValidation":"enabled","authenticatedRenderProven":false}\n' \
+            "$PREVIOUS_VERSION_ID" "$DASHBOARD_CANDIDATE_ID" > dashboard-deploy-result.json
+      - name: Restore exact Content OS baseline on failure
+        if: ${{ failure() && env.DASHBOARD_DEPLOYED == 'true' }}
+        run: |
+          set -euo pipefail
+          npx wrangler deployments status --json --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os > content-os-rollback-before.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('content-os-rollback-before.json','utf8'));
+          const latest=Array.isArray(raw)?raw[0]:raw;
+          const versions=latest?.versions??latest?.deployment?.versions??[];
+          const ids=new Set(versions.map(v=>v.version_id??v.versionId??v.id));
+          if(!ids.has(process.env.DASHBOARD_CANDIDATE_ID)||[...ids].some(id=>id!==process.env.DASHBOARD_CANDIDATE_ID&&id!==process.env.PREVIOUS_VERSION_ID)) {
+            throw new Error(`foreign Content OS deployment detected; refusing rollback: ${JSON.stringify([...ids])}`);
+          }
+          NODE
+          npx wrangler versions deploy "$PREVIOUS_VERSION_ID@100%" --cwd "$WRANGLER_EMPTY_CWD" --name umkm-content-os --message 'Automatic rollback after dashboard Access hardening failure' -y
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: content-os-monetization-dashboard-deploy
+          path: |
+            content-os-before.json
+            content-os-upload.txt
+            content-os-versions.json
+            content-os-candidate.json
+            access-certs.json
+            dashboard-deploy-result.json
+            content-os-rollback-before.json
+          if-no-files-found: warn
+          retention-days: 14

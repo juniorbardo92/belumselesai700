@@ -1,0 +1,45 @@
+--- R2/code/reconcile_repliz.py
++++ R2.1/code/reconcile_repliz.py
+@@ -13,7 +13,8 @@
+   3. Baris READY + publish_status=SCHEDULED ikut direkonsiliasi (5 utas yang
+      sebelumnya tidak pernah terlihat oleh reconciler).
+   4. Retry/backoff untuk 429/5xx dengan Retry-After; kegagalan tetap fail-closed.
+-  5. Mode default SHADOW: tidak mempromosikan status. Promosi hanya jika
++  5. R2.1: cabang legacy published/posted tidak boleh bypass SHADOW.
++  6. Mode default SHADOW: tidak mempromosikan status. Promosi hanya jika
+      UMKM_CONTENT_PROOF_PROMOTE=1 DAN UMKM_CONTENT_PROOF_PUBLISHED_AT=root_createdAt.
+ 
+ Tidak ada POST. Tidak ada perubahan skema. Exit 2 = ada alert yang belum tertutup.
+@@ -570,25 +571,13 @@
+         state = platform_state(obj)
+         state_norm = state.strip().lower()
+ 
+-        # Jalur lama: published/posted + publishedAt valid.
+-        published_at = obj.get("publishedAt") or obj.get("published_at")
+-        legacy_ok = (
+-            bool(str(obj.get("postId") or obj.get("post_id") or ""))
+-            and state_norm in {"published", "posted"}
+-            and parse_ts(published_at) is not None
+-            and parse_ts(published_at) <= datetime.now(timezone.utc)
+-        )
+-        if legacy_ok:
+-            con = db()
+-            ok = promote(con, content_id=content_id, schedule_id=schedule_id,
+-                         root_id=obj.get("postId") or obj.get("post_id"),
+-                         state=state or "published", published_at=published_at,
+-                         note="Published and reconciled via Repliz Schedule API")
+-            con.close()
+-            print(f"{content_id}={'PUBLISHED' if ok else 'NO_CHANGE'} source=SCHEDULE_API")
+-            continue
+-
+-        if state_norm != "success":
++        # R2.1 SECURITY GATE: No schedule-only fast path may promote a row.
++        # A previous R2 branch allowed status=published/posted + publishedAt to
++        # call promote() while SHADOW was active, and without owner/root proof.
++        # The provider's postId can refer to the first reply, not the root.
++        # All terminal-positive states must use full Content API thread proof
++        # and the same explicit promotion_gate below.
++        if state_norm not in {"success", "published", "posted"}:
+             con = db()
+             reason = ("REMOTE_TERMINAL:" + state_norm
+                       if state_norm in {"failed", "error", "rejected", "cancelled"} else None)

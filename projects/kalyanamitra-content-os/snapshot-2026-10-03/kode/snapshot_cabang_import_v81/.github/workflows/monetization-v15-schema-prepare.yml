@@ -1,0 +1,190 @@
+name: Monetization v15 Manual Schema Preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character commit SHA containing the reviewed migrations
+        required: true
+        type: string
+      expected_pending_migrations:
+        description: Exact comma-separated pending list (reviewed subset of 0006, 0007, 0008)
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY_V15_ADDITIVE_SCHEMA_ONLY
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umkm-monetization-production-change-freeze
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: monetization-schema-production
+    steps:
+      - name: Require exact reviewed source and explicit schema approval
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_PENDING: ${{ inputs.expected_pending_migrations }}
+        run: |
+          set -euo pipefail
+          echo "$CANDIDATE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          test "$CANDIDATE_SHA" = "$GITHUB_SHA"
+          test "$CONFIRMATION" = 'APPLY_V15_ADDITIVE_SCHEMA_ONLY'
+          node - <<'NODE'
+          const allowed=new Set(['0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql']);
+          const expected=process.env.EXPECTED_PENDING.split(',').map(value=>value.trim()).filter(Boolean);
+          if(!expected.length||new Set(expected).size!==expected.length||expected.some(name=>!allowed.has(name))){
+            throw new Error(`pending input must be a unique reviewed subset: ${expected}`);
+          }
+          NODE
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify candidate source and bundles
+        run: npm run check:all
+      - name: Match the exact reviewed pending migration list
+        env:
+          EXPECTED_PENDING: ${{ inputs.expected_pending_migrations }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          find database/migrations -type f -name '*.sql' -printf '%P\n' | LC_ALL=C sort > migration-source-files.txt
+          npx wrangler d1 migrations list umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc | tee migrations-before.txt
+          node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('migrations-before.txt','utf8');
+          const actual=[...new Set(text.match(/[0-9A-Za-z_.-]+\.sql/g)??[])].sort();
+          const expected=process.env.EXPECTED_PENDING.split(',').map(x=>x.trim()).filter(Boolean).sort();
+          const allowedSource=['0001_initial_schema.sql','0002_topic_research_schema.sql','0003_design_studio_schema.sql','0004_monetization_engine_v1.sql','0005_monetization_attribution_reconciliation.sql','0006_monetization_hardening_v15.sql','0007_monetization_record_quality.sql','0008_monetization_quality_history.sql'];
+          const allowedPending=new Set(allowedSource.slice(5));
+          const config=JSON.parse(fs.readFileSync('wrangler.monetization.candidate.jsonc','utf8'));
+          const database=(config.d1_databases??[]).find(binding=>binding.binding==='DB');
+          if(database?.migrations_dir!=='database/migrations'||Object.prototype.hasOwnProperty.call(database,'migrations_pattern')) throw new Error('candidate migration path/pattern differs from reviewed direct *.sql directory');
+          const source=fs.readFileSync('migration-source-files.txt','utf8').split(/\r?\n/).filter(Boolean);
+          if(JSON.stringify(source)!==JSON.stringify(allowedSource)) throw new Error(`migration source allowlist mismatch; refusing apply-all: ${source}`);
+          if(!expected.length||new Set(expected).size!==expected.length||expected.some(x=>!allowedPending.has(x))) throw new Error(`expected list is empty, duplicate, or not allow-listed: ${expected}`);
+          if(actual.some(x=>!allowedPending.has(x))) throw new Error(`unexpected pending migration; refusing apply-all: ${actual}`);
+          if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error(`pending mismatch actual=${actual} expected=${expected}`);
+          NODE
+      - name: Apply only the reviewed additive schema migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc
+      - name: Verify no reviewed migration remains pending
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 migrations list umkm-content-os-db --remote --config wrangler.monetization.candidate.jsonc | tee migrations-after.txt
+          node - <<'NODE'
+          const fs=require('fs');
+          const pending=fs.readFileSync('migrations-after.txt','utf8').match(/[0-9A-Za-z_.-]+\.sql/g)??[];
+          if(pending.length) throw new Error(`migrations remain pending: ${pending}`);
+          NODE
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc \
+            --command="SELECT name,type,sql FROM sqlite_master WHERE name IN ('monetization_api_rate_limits','monetization_analytics_snapshots','monetization_daily_analytics_v15','monetization_record_quality','monetization_record_quality_history','monetization_quality_history_no_update','monetization_quality_history_no_delete','idx_monetization_rate_limits_expiry','idx_monetization_events_brand_time','idx_monetization_revenue_brand_time','idx_monetization_daily_brand_day','idx_monetization_touchpoints_event','idx_monetization_analytics_snapshots_latest','idx_monetization_daily_v15_snapshot_day','idx_monetization_record_quality_scope','idx_monetization_quality_history_record') ORDER BY name;" > schema-inventory.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc \
+            --command="SELECT 'monetization_api_rate_limits' AS table_name,cid,name,type,\"notnull\" AS not_null,dflt_value,pk FROM pragma_table_info('monetization_api_rate_limits') UNION ALL SELECT 'monetization_analytics_snapshots',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_analytics_snapshots') UNION ALL SELECT 'monetization_daily_analytics_v15',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_daily_analytics_v15') UNION ALL SELECT 'monetization_record_quality',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_record_quality') UNION ALL SELECT 'monetization_record_quality_history',cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('monetization_record_quality_history') ORDER BY table_name,cid;" > schema-columns.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc \
+            --command="SELECT 'monetization_analytics_snapshots' AS table_name,[table] AS target_table,[from] AS from_column,[to] AS to_column,on_delete FROM pragma_foreign_key_list('monetization_analytics_snapshots') UNION ALL SELECT 'monetization_daily_analytics_v15',[table],[from],[to],on_delete FROM pragma_foreign_key_list('monetization_daily_analytics_v15') ORDER BY table_name,from_column;" > schema-foreign-keys.json
+          npx wrangler d1 execute umkm-content-os-db --remote --yes --json --config wrangler.monetization.candidate.jsonc \
+            --command="SELECT 'idx_monetization_rate_limits_expiry' AS index_name,seqno,name FROM pragma_index_info('idx_monetization_rate_limits_expiry') UNION ALL SELECT 'idx_monetization_events_brand_time',seqno,name FROM pragma_index_info('idx_monetization_events_brand_time') UNION ALL SELECT 'idx_monetization_revenue_brand_time',seqno,name FROM pragma_index_info('idx_monetization_revenue_brand_time') UNION ALL SELECT 'idx_monetization_daily_brand_day',seqno,name FROM pragma_index_info('idx_monetization_daily_brand_day') UNION ALL SELECT 'idx_monetization_touchpoints_event',seqno,name FROM pragma_index_info('idx_monetization_touchpoints_event') UNION ALL SELECT 'idx_monetization_analytics_snapshots_latest',seqno,name FROM pragma_index_info('idx_monetization_analytics_snapshots_latest') UNION ALL SELECT 'idx_monetization_daily_v15_snapshot_day',seqno,name FROM pragma_index_info('idx_monetization_daily_v15_snapshot_day') UNION ALL SELECT 'idx_monetization_record_quality_scope',seqno,name FROM pragma_index_info('idx_monetization_record_quality_scope') UNION ALL SELECT 'idx_monetization_quality_history_record',seqno,name FROM pragma_index_info('idx_monetization_quality_history_record') ORDER BY index_name,seqno;" > schema-index-columns.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync('schema-inventory.json','utf8'));
+          const rows=payload?.[0]?.results??[];
+          const actual=rows.map(row=>row.name).sort();
+          const expectedTypes={
+            monetization_analytics_snapshots:'table',monetization_api_rate_limits:'table',monetization_daily_analytics_v15:'table',
+            monetization_record_quality:'table',monetization_record_quality_history:'table',
+            monetization_quality_history_no_update:'trigger',monetization_quality_history_no_delete:'trigger',
+            idx_monetization_rate_limits_expiry:'index',idx_monetization_events_brand_time:'index',idx_monetization_revenue_brand_time:'index',
+            idx_monetization_daily_brand_day:'index',idx_monetization_touchpoints_event:'index',idx_monetization_analytics_snapshots_latest:'index',
+            idx_monetization_daily_v15_snapshot_day:'index',idx_monetization_record_quality_scope:'index',idx_monetization_quality_history_record:'index'
+          };
+          const expected=Object.keys(expectedTypes).sort();
+          if(JSON.stringify(actual)!==JSON.stringify(expected)||rows.some(row=>row.type!==expectedTypes[row.name])){
+            throw new Error(`schema inventory mismatch: ${JSON.stringify(rows.map(({name,type})=>({name,type})))}`);
+          }
+          const columns=JSON.parse(fs.readFileSync('schema-columns.json','utf8'))?.[0]?.results??[];
+          const expectedColumns={
+            monetization_api_rate_limits:['scope:TEXT:1:NULL:1','window_start:TEXT:1:NULL:2','count:INTEGER:1:0:0','expires_at:TEXT:1:NULL:0'],
+            monetization_analytics_snapshots:["id:TEXT:0:NULL:1","brand_id:TEXT:1:NULL:0","data_scope:TEXT:1:NULL:0","period_days:INTEGER:1:NULL:0","status:TEXT:1:'preparing':0","error_message:TEXT:0:NULL:0","created_at:TEXT:1:CURRENT_TIMESTAMP:0","completed_at:TEXT:0:NULL:0"],
+            monetization_daily_analytics_v15:["snapshot_id:TEXT:1:NULL:1","day:TEXT:1:NULL:2","brand_id:TEXT:1:NULL:3","content_item_id:TEXT:1:'':4","campaign_id:TEXT:1:'':5","offer_id:TEXT:1:'':6","platform:TEXT:1:'':7","impressions:INTEGER:1:0:0","views:INTEGER:1:0:0","clicks:INTEGER:1:0:0","leads:INTEGER:1:0:0","checkouts:INTEGER:1:0:0","conversion_events:INTEGER:1:0:0","confirmed_transactions:INTEGER:1:0:0","reversals:INTEGER:1:0:0","gross_revenue:INTEGER:1:0:0","net_revenue:INTEGER:1:0:0","contribution_margin:INTEGER:1:0:0","created_at:TEXT:1:CURRENT_TIMESTAMP:0"],
+            monetization_record_quality:["record_type:TEXT:1:NULL:1","record_id:TEXT:1:NULL:2","data_class:TEXT:1:'unknown':0","verification_status:TEXT:1:'unverified':0","amount_basis:TEXT:0:NULL:0","fee_status:TEXT:0:NULL:0","cost_status:TEXT:0:NULL:0","evidence_ref:TEXT:0:NULL:0","reason:TEXT:0:NULL:0","metadata_json:TEXT:1:'{}':0","created_at:TEXT:1:CURRENT_TIMESTAMP:0","updated_at:TEXT:1:CURRENT_TIMESTAMP:0"],
+            monetization_record_quality_history:["sequence:INTEGER:0:NULL:1","id:TEXT:1:NULL:0","record_type:TEXT:1:NULL:0","record_id:TEXT:1:NULL:0","previous_data_class:TEXT:0:NULL:0","previous_verification_status:TEXT:0:NULL:0","previous_evidence_ref:TEXT:0:NULL:0","previous_reason:TEXT:0:NULL:0","previous_metadata_json:TEXT:0:NULL:0","new_data_class:TEXT:1:NULL:0","new_verification_status:TEXT:1:NULL:0","evidence_ref:TEXT:0:NULL:0","reason:TEXT:0:NULL:0","new_metadata_json:TEXT:0:NULL:0","actor_type:TEXT:1:NULL:0","correlation_id:TEXT:0:NULL:0","metadata_json:TEXT:1:'{}':0","created_at:TEXT:1:CURRENT_TIMESTAMP:0"]
+          };
+          for(const [table,shape] of Object.entries(expectedColumns)){
+            const tableColumns=columns.filter(row=>row.table_name===table).sort((a,b)=>Number(a.cid)-Number(b.cid)).map(row=>`${row.name}:${String(row.type).toUpperCase()}:${Number(row.not_null)}:${row.dflt_value===null?'NULL':String(row.dflt_value)}:${Number(row.pk)}`);
+            if(JSON.stringify(tableColumns)!==JSON.stringify(shape)) throw new Error(`${table} column shape mismatch: ${tableColumns}`);
+          }
+          const foreignKeys=JSON.parse(fs.readFileSync('schema-foreign-keys.json','utf8'))?.[0]?.results??[];
+          const actualForeignKeys=foreignKeys.map(row=>`${row.table_name}:${row.from_column}:${row.target_table}:${row.to_column}:${String(row.on_delete).toUpperCase()}`).sort();
+          const expectedForeignKeys=['monetization_analytics_snapshots:brand_id:brands:id:CASCADE','monetization_daily_analytics_v15:brand_id:brands:id:CASCADE','monetization_daily_analytics_v15:snapshot_id:monetization_analytics_snapshots:id:CASCADE'].sort();
+          if(JSON.stringify(actualForeignKeys)!==JSON.stringify(expectedForeignKeys)) throw new Error(`foreign key mismatch: ${actualForeignKeys}`);
+          const indexRows=JSON.parse(fs.readFileSync('schema-index-columns.json','utf8'))?.[0]?.results??[];
+          const expectedIndexes={
+            idx_monetization_rate_limits_expiry:['expires_at'],idx_monetization_events_brand_time:['brand_id','occurred_at'],idx_monetization_revenue_brand_time:['brand_id','occurred_at'],
+            idx_monetization_daily_brand_day:['brand_id','day'],idx_monetization_touchpoints_event:['event_id'],idx_monetization_analytics_snapshots_latest:['brand_id','data_scope','status','completed_at'],
+            idx_monetization_daily_v15_snapshot_day:['snapshot_id','day'],idx_monetization_record_quality_scope:['record_type','data_class','verification_status'],idx_monetization_quality_history_record:['record_type','record_id','created_at']
+          };
+          for(const [index,indexColumns] of Object.entries(expectedIndexes)){
+            const actual=indexRows.filter(row=>row.index_name===index).sort((a,b)=>Number(a.seqno)-Number(b.seqno)).map(row=>row.name);
+            if(JSON.stringify(actual)!==JSON.stringify(indexColumns)) throw new Error(`${index} column mismatch: ${actual}`);
+          }
+          const compactSql=new Map(rows.map(row=>[row.name,String(row.sql??'').replace(/\s+/g,'').toLowerCase()]));
+          const expectedTableSql={
+            monetization_api_rate_limits:'createtablemonetization_api_rate_limits(scopetextnotnull,window_starttextnotnull,countintegernotnulldefault0,expires_attextnotnull,primarykey(scope,window_start))',
+            monetization_analytics_snapshots:"createtablemonetization_analytics_snapshots(idtextprimarykey,brand_idtextnotnull,data_scopetextnotnullcheck(data_scopein('verified-production','legacy-unclassified')),period_daysintegernotnull,statustextnotnulldefault'preparing'check(statusin('preparing','complete','error')),error_messagetext,created_attextnotnulldefaultcurrent_timestamp,completed_attext,foreignkey(brand_id)referencesbrands(id)ondeletecascade)",
+            monetization_daily_analytics_v15:"createtablemonetization_daily_analytics_v15(snapshot_idtextnotnull,daytextnotnull,brand_idtextnotnull,content_item_idtextnotnulldefault'',campaign_idtextnotnulldefault'',offer_idtextnotnulldefault'',platformtextnotnulldefault'',impressionsintegernotnulldefault0,viewsintegernotnulldefault0,clicksintegernotnulldefault0,leadsintegernotnulldefault0,checkoutsintegernotnulldefault0,conversion_eventsintegernotnulldefault0,confirmed_transactionsintegernotnulldefault0,reversalsintegernotnulldefault0,gross_revenueintegernotnulldefault0,net_revenueintegernotnulldefault0,contribution_marginintegernotnulldefault0,created_attextnotnulldefaultcurrent_timestamp,primarykey(snapshot_id,day,brand_id,content_item_id,campaign_id,offer_id,platform),foreignkey(snapshot_id)referencesmonetization_analytics_snapshots(id)ondeletecascade,foreignkey(brand_id)referencesbrands(id)ondeletecascade)",
+            monetization_record_quality:"createtablemonetization_record_quality(record_typetextnotnullcheck(record_typein('event','revenue_event','learning_insight')),record_idtextnotnull,data_classtextnotnulldefault'unknown'check(data_classin('production','acceptance','synthetic','internal_test','unknown')),verification_statustextnotnulldefault'unverified'check(verification_statusin('verified','unverified')),amount_basistextcheck(amount_basisisnulloramount_basisin('provider_reported','system_derived','manual','unknown')),fee_statustextcheck(fee_statusisnullorfee_statusin('actual','estimated','not_applicable','unknown')),cost_statustextcheck(cost_statusisnullorcost_statusin('actual','estimated','not_applicable','unknown')),evidence_reftext,reasontext,metadata_jsontextnotnulldefault'{}',created_attextnotnulldefaultcurrent_timestamp,updated_attextnotnulldefaultcurrent_timestamp,primarykey(record_type,record_id))",
+            monetization_record_quality_history:"createtablemonetization_record_quality_history(sequenceintegerprimarykeyautoincrement,idtextnotnullunique,record_typetextnotnullcheck(record_typein('event','revenue_event','learning_insight')),record_idtextnotnull,previous_data_classtext,previous_verification_statustext,previous_evidence_reftext,previous_reasontext,previous_metadata_jsontext,new_data_classtextnotnullcheck(new_data_classin('production','acceptance','synthetic','internal_test','unknown')),new_verification_statustextnotnullcheck(new_verification_statusin('verified','unverified')),evidence_reftext,reasontext,new_metadata_jsontext,actor_typetextnotnull,correlation_idtext,metadata_jsontextnotnulldefault'{}',created_attextnotnulldefaultcurrent_timestamp)"
+          };
+          for(const [name,sql] of Object.entries(expectedTableSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} SQL mismatch`);
+          const expectedIndexSql={
+            idx_monetization_rate_limits_expiry:'createindexidx_monetization_rate_limits_expiryonmonetization_api_rate_limits(expires_at)',
+            idx_monetization_events_brand_time:'createindexidx_monetization_events_brand_timeonmonetization_events(brand_id,occurred_atdesc)',
+            idx_monetization_revenue_brand_time:'createindexidx_monetization_revenue_brand_timeonmonetization_revenue_events(brand_id,occurred_atdesc)',
+            idx_monetization_daily_brand_day:'createindexidx_monetization_daily_brand_dayonmonetization_daily_analytics(brand_id,daydesc)',
+            idx_monetization_touchpoints_event:'createindexidx_monetization_touchpoints_eventonmonetization_touchpoints(event_id)',
+            idx_monetization_analytics_snapshots_latest:'createindexidx_monetization_analytics_snapshots_latestonmonetization_analytics_snapshots(brand_id,data_scope,status,completed_atdesc)',
+            idx_monetization_daily_v15_snapshot_day:'createindexidx_monetization_daily_v15_snapshot_dayonmonetization_daily_analytics_v15(snapshot_id,daydesc)',
+            idx_monetization_record_quality_scope:'createindexidx_monetization_record_quality_scopeonmonetization_record_quality(record_type,data_class,verification_status)',
+            idx_monetization_quality_history_record:'createindexidx_monetization_quality_history_recordonmonetization_record_quality_history(record_type,record_id,created_atdesc)'
+          };
+          for(const [name,sql] of Object.entries(expectedIndexSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} SQL mismatch`);
+          const expectedTriggerSql={
+            monetization_quality_history_no_update:"createtriggermonetization_quality_history_no_updatebeforeupdateonmonetization_record_quality_historybeginselectraise(abort,'monetization_record_quality_historyisappend-only');end",
+            monetization_quality_history_no_delete:"createtriggermonetization_quality_history_no_deletebeforedeleteonmonetization_record_quality_historybeginselectraise(abort,'monetization_record_quality_historyisappend-only');end"
+          };
+          for(const [name,sql] of Object.entries(expectedTriggerSql)) if(compactSql.get(name)!==sql) throw new Error(`${name} body mismatch or unexpected WHEN clause`);
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monetization-v15-schema-evidence
+          path: |
+            migrations-before.txt
+            migrations-after.txt
+            migration-source-files.txt
+            schema-inventory.json
+            schema-columns.json
+            schema-foreign-keys.json
+            schema-index-columns.json
+          if-no-files-found: warn
+          retention-days: 14

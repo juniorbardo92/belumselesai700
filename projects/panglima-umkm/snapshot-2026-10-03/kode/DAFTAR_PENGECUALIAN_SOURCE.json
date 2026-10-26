@@ -1,0 +1,535 @@
+{
+  "snapshot": "7fa29ac9d5bd3ce88cfcff46cf3606d178142e68",
+  "not_a_complete_build_snapshot": true,
+  "reason": "88 bagian modul terenkripsi lama tidak diekspor; aset modul APK v1.3.15 disertakan persis.",
+  "files": [
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-000",
+      "sha": "902817d586b35ad8e346a81c7f729f4bf2ca801a",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-001",
+      "sha": "de57cd52c3fe44442a6191f0cfe2c8ab0f88bbf1",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-002",
+      "sha": "e59dfc1b0d1384b5f19b1f2c1fa24a5ca969b291",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-003",
+      "sha": "73c111a031d80578f4eeb9284c59eb715bd3c3e7",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-004",
+      "sha": "21c329c56f6baf0814d2537560aaf88225a46eb4",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-005",
+      "sha": "5725d642b5f402a654042f455f884e78b20865a6",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-006",
+      "sha": "adc3dee11b1a0bc708ec8d7cdf25ea6aae39b235",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-007",
+      "sha": "69d9fcf283a9dfe144cefd85a5646c0073d01138",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-008",
+      "sha": "22d9d7ce64a07ac73531a9217b0ec00ea5b637fd",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-009",
+      "sha": "8c1e62a34ff865132c26401ebb57f5718f86ce7b",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-010",
+      "sha": "9ef6d1dfd28d44cdfb636938a97ee8ee9b325b17",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-011",
+      "sha": "13ca98c5336741c34e2a854eaf740b91d6e30252",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-012",
+      "sha": "4c4b432ef245e7628c3b2df01cfdb20c208b8142",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-013",
+      "sha": "b72a5d6defe856f2a558cee7ac045cace72b126e",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-014",
+      "sha": "8ef57a21d59b19bc002d585f1d9ba3d12aab93d2",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-015",
+      "sha": "646a240ab0d93f3db450fa04c92d091dfbd570ad",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-016",
+      "sha": "981f4c04c86951181d6f1322c9e2128673c17181",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-017",
+      "sha": "dd7c2094bc52b36a995730f2fc4a5b263e828199",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-018",
+      "sha": "72a11a5a491c3d82f5016be03239a6d659ad4908",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-019",
+      "sha": "eed3838e4ddeae6c8d4b1e440744d2209d3fff39",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-020",
+      "sha": "76f27affc9780c3fe4bf5802f2634efb5fc77644",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-021",
+      "sha": "36023674d7c4fd92733212725e4c5c5ec4ec9e1b",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/insurance.pmod.part-022",
+      "sha": "9df9b51bcb956ddb8b6e12a5d11b764ca27e4b73",
+      "size": 569550,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-000",
+      "sha": "fd7d44b8f1b44f291066069bf203e756484d6084",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-001",
+      "sha": "934a855206f0d8e790d48ff783f0bef829885919",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-002",
+      "sha": "5ec221ad7546a01d6e0aa4f4541c52d3fb150cfd",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-003",
+      "sha": "df4629b1be97dc4a132199411ca249aa5d26c9f4",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-004",
+      "sha": "6da36b42c224d55937cc7e306db037268fe6fe70",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-005",
+      "sha": "ff76475d3a35355b22ea11049f64c4b7b5c2fdea",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-006",
+      "sha": "3e1196a769a5b6d5457cd87ab3d671e70b98c324",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-007",
+      "sha": "47b1c10e86e1034244927f7848bf72e7cc97de50",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-008",
+      "sha": "34860a5751e6b367f87ea1da6d2cb4048165e091",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-009",
+      "sha": "13cc9668d36c551d93cbacde1202466663cc9b06",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-010",
+      "sha": "7d467a16d2f20ae02b1903fcb864bac322bd4a09",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-011",
+      "sha": "dd941362a4c63a1f94fd5c03625052aa38d78785",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-012",
+      "sha": "2ff05e858713c572eadf1491317b5c2fd288333e",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-013",
+      "sha": "74a0127928375f26ca1ac007fa7497f963ffc8ce",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-014",
+      "sha": "4f01451e1a37869e9ca264f0ca826e6cf5c98f6a",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-015",
+      "sha": "61b32c007e54d466a2d46f1f0241f1fb49981ed2",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-016",
+      "sha": "bfc665a3023df8e867eda0b8785c8937b543b645",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-017",
+      "sha": "98fd3df77fab9057df20fb54f43e7b698c01a09f",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-018",
+      "sha": "d730bacde1909da6145165bcb717a876e3d09165",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-019",
+      "sha": "5e583c37edb9da98535ad70a851cef778399a1de",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-020",
+      "sha": "163e7aaadc47a7b6ae82a3857ad974f8dd92446c",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-021",
+      "sha": "b26057afb0e1e3fb4135363b365c8c228ed09f01",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-022",
+      "sha": "e3984ee5afb1d1c60b5d920e27138c1a8499ffde",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-023",
+      "sha": "6274826bef1fba39d9bf246fc3c0b75c95a59dfa",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-024",
+      "sha": "deb964db76f3feca11cfaa79f8545a46a4949b72",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-025",
+      "sha": "db26ab917459b80e7eb9f39a30a6f08adb083242",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-026",
+      "sha": "fe3d514aae2f1c81b7adadb8eb40d3f47ffc9cd5",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-027",
+      "sha": "534cfb72c43b78227c899e711dbf11c2299f7b1e",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-028",
+      "sha": "e126c93b23b8bbd292711df30f628893d0847e36",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-029",
+      "sha": "dc9c873e58f3da355717919a94b4a7bc65781749",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-030",
+      "sha": "97754022697a065cbfbbaf3c9d8b6f290e272af3",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-031",
+      "sha": "a8e8a671455446fea8e4301bffcc8a14a6da1486",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-032",
+      "sha": "f65b4cc0f6689bbfc8d6fb57e032ff75c10538cb",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/mlm.pmod.part-033",
+      "sha": "a77af397aa399f71dc43a39e779c2d20aeeda997",
+      "size": 143435,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-000",
+      "sha": "c178e4d32aca9df9d6c0cf08f0c407df91105592",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-001",
+      "sha": "9d9d0f690301a02c0bbf7646c576f5ac7a3ada3e",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-002",
+      "sha": "aa25ba699210e95a20bb17ef4e0b3397b0a5fd3f",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-003",
+      "sha": "0ee6681bf03d2afbd2ab5c5506982b47d76745cc",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-004",
+      "sha": "3e43a48a1282a4562c2035b2f7a3a602d3d1a0db",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-005",
+      "sha": "88e655171b468e278d1c2bafabeb2ebe7a272e14",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-006",
+      "sha": "a891ccb53b11e9d0b5858919e6a034e30f616832",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-007",
+      "sha": "2dabac3e2e12d5c4dc209c5906280787fb7f4230",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-008",
+      "sha": "dd72a69b7b0258f8287e1a52d9c7eab67948d5b3",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-009",
+      "sha": "4dba7387f419d40a056fab235d5b886e60e238c3",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-010",
+      "sha": "b0ae5f360198673ec64039d5887ce6527ac8f6bc",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-011",
+      "sha": "8224a2f516467af04fa02d40ce8e7e95666dba54",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-012",
+      "sha": "2b3c3a92e80269781256b8be02df2b7957647307",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-013",
+      "sha": "5d8aac006987141e6430b8db2ae4cd88352243b6",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-014",
+      "sha": "e3aa55794a0f816b66b41d107f878c6d1330b439",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-015",
+      "sha": "125e6745ce262c6d98a54af35f04276a88633cc9",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-016",
+      "sha": "2103281dffac35345d828431765506ea4c877b29",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-017",
+      "sha": "5d1a82ba4d75fe3f7207f2dcaeafb6db2853a44a",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-018",
+      "sha": "85e6fd2b2c507d07839ea3a3895e913fb3f68c4a",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-019",
+      "sha": "8440d473fac761cc08938497416ecdcd5123004a",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-020",
+      "sha": "638b261ebc075ebbfcd89f7d5f2d04ab403d793d",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-021",
+      "sha": "7e7bc7f58345707fe28d5541d21abc717a57751f",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-022",
+      "sha": "881753ef815b4275a9d7beebe4130415bb001c66",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-023",
+      "sha": "63b2d1e8bb3036bfdbfd7f3354164d086afd1ad8",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-024",
+      "sha": "70fae3495bf142fe34560d46072da460a3185531",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-025",
+      "sha": "d4652af72f6b2a86844c4515ad84b208d98cc0b9",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-026",
+      "sha": "ba90948d2cb4ed2004c7c9c27bb81c9ded3d9644",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-027",
+      "sha": "0ce4347981556b2b9d5dbd4c9a09e0b5c7288f62",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-028",
+      "sha": "9d36dfacb2233496e1ab58b0fd7ba415ea14e3c6",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-029",
+      "sha": "8545daedc12971ee82525d31daaf37079d38e69f",
+      "size": 737280,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    },
+    {
+      "path": "Panglima UMKM/module-parts/property.pmod.part-030",
+      "sha": "aa1266f053140d9f5e67bbbb3a81b29e68f2b578",
+      "size": 569588,
+      "reason": "Encrypted legacy module parts; current module assets are preserved in APK v1.3.15."
+    }
+  ]
+}

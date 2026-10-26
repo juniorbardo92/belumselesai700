@@ -1,0 +1,121 @@
+name: Validate Content OS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run types
+      - run: npm run check
+      - run: node --test --experimental-strip-types src/history-reset-policy.test.ts
+      - run: node --check renderer/render.mjs
+      - run: node --test renderer/brand-profile.test.mjs
+      - run: npm run build
+      - name: Save deployable Worker bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify Cloudflare deployment credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN" >&2; exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID" >&2; exit 1)
+          test -n "$CF_ACCESS_CLIENT_ID" || (echo "Missing CF_ACCESS_CLIENT_ID" >&2; exit 1)
+          test -n "$CF_ACCESS_CLIENT_SECRET" || (echo "Missing CF_ACCESS_CLIENT_SECRET" >&2; exit 1)
+      - name: Apply additive D1 migrations
+        run: npx wrangler d1 migrations apply DB --remote
+      - name: Deploy Worker and cron
+        run: npx wrangler deploy
+      - name: Trigger one-shot reset with an ephemeral token
+        run: |
+          reset_token=$(openssl rand -hex 32)
+          echo "::add-mask::$reset_token"
+          reset_hash=$(printf '%s' "$reset_token" | sha256sum | awk '{print $1}')
+          npx wrangler d1 execute DB --remote --command "INSERT INTO history_reset_requests (version, token_hash, status, issued_by, created_at, claimed_at, completed_at, error_message, updated_at) VALUES ('2026-09-21-clean-slate-v1', '$reset_hash', 'pending', '$GITHUB_SHA', CURRENT_TIMESTAMP, NULL, NULL, NULL, CURRENT_TIMESTAMP) ON CONFLICT(version) DO UPDATE SET token_hash = excluded.token_hash, status = 'pending', issued_by = excluded.issued_by, created_at = CURRENT_TIMESTAMP, claimed_at = NULL, completed_at = NULL, error_message = NULL, updated_at = CURRENT_TIMESTAMP"
+          reset_response_file="$RUNNER_TEMP/history-reset-response.json"
+          http_status=$(curl --silent --show-error \
+            --retry 2 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 15 --max-time 300 \
+            --request POST \
+            --header "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            --header "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            --header "Authorization: Bearer $reset_token" \
+            --header "Accept: application/json" \
+            --output "$reset_response_file" \
+            --write-out "%{http_code}" \
+            "https://umkm-content-os.ruang-belajar-mandiri01.workers.dev/api/system/reset/run")
+          unset reset_token
+          if [ "$http_status" = "200" ] || [ "$http_status" = "202" ]; then
+            node -e 'const fs = require("node:fs"); const parsed = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const status = parsed?.reset?.status; if (!["pending", "running", "completed"].includes(status)) { console.error(`Unexpected reset status: ${String(status)}`); process.exit(1); } console.log(`Reset endpoint accepted request with status: ${status}`);' "$reset_response_file"
+          elif [ "$http_status" = "302" ]; then
+            echo "Reset endpoint is protected by Access; queued reset will continue on cron."
+          else
+            echo "Reset endpoint returned HTTP $http_status." >&2
+            exit 1
+          fi
+      - name: Verify one-shot history reset
+        run: |
+          reset_status_file="$RUNNER_TEMP/history-reset-status.json"
+          for attempt in $(seq 1 32); do
+            if ! npx wrangler d1 execute DB --remote --json --command "SELECT status, attempt_count, remote_cancelled, remote_absent, r2_deleted, local_rows_deleted_json, error_message, completed_at FROM history_reset_runs WHERE version = '2026-09-21-clean-slate-v1'" > "$reset_status_file"; then
+              sleep 15
+              continue
+            fi
+            if ! reset_record=$(node -e 'const fs = require("node:fs"); const payload = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const statements = Array.isArray(payload) ? payload : [payload]; const row = statements.flatMap((statement) => Array.isArray(statement?.results) ? statement.results : [])[0]; if (!row) { console.log("pending"); process.exit(0); } if (typeof row.status !== "string") process.exit(2); console.log(row.status); console.log(Number(row.attempt_count ?? 0)); console.log(JSON.stringify(row));' "$reset_status_file"); then
+              echo "D1 reset status response was not valid." >&2
+              exit 1
+            fi
+            reset_status=$(printf '%s\n' "$reset_record" | sed -n '1p')
+            if [ "$reset_status" = "completed" ]; then
+              printf '%s\n' "$reset_record"
+              echo "History reset completed."
+              exit 0
+            fi
+            if [ "$reset_status" = "failed" ]; then
+              reset_attempt_count=$(printf '%s\n' "$reset_record" | sed -n '2p')
+              if [ "$reset_attempt_count" -lt 3 ]; then
+                echo "History reset attempt $reset_attempt_count failed; waiting for the next cron retry."
+                sleep 15
+                continue
+              fi
+              printf '%s\n' "$reset_record" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "History reset did not complete within the verification window." >&2
+          exit 1

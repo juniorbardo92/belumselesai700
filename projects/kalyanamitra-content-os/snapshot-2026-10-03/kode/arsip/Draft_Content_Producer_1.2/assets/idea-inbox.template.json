@@ -1,0 +1,32 @@
+{
+  "schema_version": "kalyanamitra-idea-inbox.v1",
+  "inbox_id": "rk-ideas-20260902",
+  "created_at": "2026-09-02T09:00:00+07:00",
+  "updated_at": "2026-09-02T09:00:00+07:00",
+  "owner_namespace": "ruang-kalyanamitra",
+  "language": "id-ID",
+  "timezone": "Asia/Jakarta",
+  "items": [
+    {
+      "idea_id": "idea-pikiran-berulang-001",
+      "source_type": "audience-question",
+      "title": "Mengapa percakapan lama terus berputar di pikiran?",
+      "summary": "Pertanyaan audiens yang sudah dianonimkan tentang kesulitan melepaskan percakapan konflik setelah peristiwanya selesai.",
+      "source_url": null,
+      "source_date": "2026-09-02",
+      "captured_at": "2026-09-02T09:00:00+07:00",
+      "tradition_hint": "cross-tradition",
+      "time_sensitive": false,
+      "usage": "inspiration-only",
+      "priority": 4,
+      "review_status": "needs-review",
+      "reviewed_at": null,
+      "reviewed_by": null,
+      "privacy_status": "anonymized-private-input",
+      "status": "active",
+      "tags": ["pikiran", "konflik", "kehidupan-sehari-hari"],
+      "source_note": "Template example. Replace with a real anonymized audience pattern before use.",
+      "used_in_external_ids": []
+    }
+  ]
+}

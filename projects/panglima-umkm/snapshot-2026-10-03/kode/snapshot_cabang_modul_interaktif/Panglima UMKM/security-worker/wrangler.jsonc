@@ -1,0 +1,28 @@
+{
+  "name": "panglima-device-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "services": [
+    {
+      "binding": "PANGLIMA_CORE",
+      "service": "panglima-apk-api"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "PANGLIMA_DEVICE_DB",
+      "database_name": "panglima-device-db",
+      "database_id": "REPLACE_RESOURCE_ID"
+    },
+    {
+      "binding": "PANGLIMA_APP_DB",
+      "database_name": "panglima-apk-db",
+      "database_id": "REPLACE_RESOURCE_ID"
+    }
+  ]
+}

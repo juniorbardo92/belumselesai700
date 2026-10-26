@@ -1,0 +1,89 @@
+name: Monetization Production Learning Refresh
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-production-learning-refresh.request'
+      - '.github/workflows/monetization-production-learning-refresh.yml'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require production aggregate-only marker
+        shell: bash
+        run: |
+          test -f activation/monetization-production-learning-refresh.request
+          grep -q '^approved=yes$' activation/monetization-production-learning-refresh.request
+          grep -q '^mode=production-aggregates-only-non-destructive$' activation/monetization-production-learning-refresh.request
+          grep -q '^period_days=30$' activation/monetization-production-learning-refresh.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Verify Revenue Learning runtime is enabled
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/status.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/learning/status")
+          test "$code" = '200'
+          node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('/tmp/status.json','utf8'));
+          if(body.ok!==true||body.configured!==true||body.enabled!==true) process.exit(1);
+          console.log(`MODEL=${body.model}`);
+          console.log(`ACTIVE_INSIGHTS_BEFORE=${body.activeInsights}`);
+          NODE
+      - name: Run Revenue Learning on production aggregates
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --max-time 180 --output /tmp/run.json --write-out '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/learning/run?days=30")
+          test "$code" = '200' -o "$code" = '201'
+          node - <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('/tmp/run.json','utf8'));
+          if(body.ok!==true) process.exit(1);
+          if(body.skipped===true){
+            console.log(`LEARNING_SKIPPED=${body.reason}`);
+            process.exit(0);
+          }
+          if(!Number.isInteger(body.storedInsights)||body.storedInsights<1) process.exit(1);
+          const analysis=body.analysis&&typeof body.analysis==='object'?body.analysis:{};
+          console.log(`STORED_INSIGHTS=${body.storedInsights}`);
+          console.log(`HAS_RESEARCH_GUIDANCE=${Boolean(analysis.researchGuidance)}`);
+          console.log(`HAS_CONTENT_GUIDANCE=${Boolean(analysis.contentGuidance)}`);
+          NODE
+      - name: Verify stored insight and OpenClaw research enrichment
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          context_code=$(curl --silent --show-error --output /tmp/context.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/learning/context")
+          readiness_code=$(curl --silent --show-error --output /tmp/readiness.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/openclaw/research-readiness")
+          test "$context_code" = '200'
+          test "$readiness_code" = '200'
+          node - <<'NODE'
+          const fs=require('fs');
+          const context=JSON.parse(fs.readFileSync('/tmp/context.json','utf8'));
+          const readiness=JSON.parse(fs.readFileSync('/tmp/readiness.json','utf8'));
+          if(context.ok!==true||!Array.isArray(context.insights)||context.insights.length<1) process.exit(1);
+          if(readiness.ok!==true||readiness?.revenueLearning?.available!==true) process.exit(1);
+          if(readiness.revenueLearning.activeInsights<1) process.exit(1);
+          console.log(`ACTIVE_INSIGHTS_AFTER=${readiness.revenueLearning.activeInsights}`);
+          console.log(`RESEARCH_ENRICHMENT_KEYWORDS=${readiness.revenueLearning.enrichmentKeywordCount}`);
+          NODE

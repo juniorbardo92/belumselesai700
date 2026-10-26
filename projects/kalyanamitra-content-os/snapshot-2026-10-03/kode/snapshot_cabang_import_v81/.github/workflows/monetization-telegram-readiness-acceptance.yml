@@ -1,0 +1,60 @@
+name: Monetization Telegram Readiness Acceptance
+
+on:
+  push:
+    branches: [build/monetization-engine-v1]
+    paths:
+      - 'activation/monetization-telegram-readiness-acceptance.request'
+      - '.github/workflows/monetization-telegram-readiness-acceptance.yml'
+
+permissions:
+  contents: read
+
+env:
+  MONETIZATION_INGEST_TOKEN: ${{ secrets.MONETIZATION_INGEST_TOKEN }}
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require marker and API credential
+        shell: bash
+        run: |
+          test -f activation/monetization-telegram-readiness-acceptance.request
+          grep -q '^approved=yes$' activation/monetization-telegram-readiness-acceptance.request
+          test -n "$MONETIZATION_INGEST_TOKEN"
+      - name: Verify Telegram is exclusively OpenClaw-orchestrated
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/runtime.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $MONETIZATION_INGEST_TOKEN" \
+            "$BASE/api/monetization/telegram/runtime")
+          cat /tmp/runtime.json
+          test "$code" = '200'
+          grep -q '"transport":"openclaw"' /tmp/runtime.json
+          grep -q '"singleBot":true' /tmp/runtime.json
+          grep -q '"directWebhook":false' /tmp/runtime.json
+          grep -q '"publishing":false' /tmp/runtime.json
+          grep -q '"/learning"' /tmp/runtime.json
+      - name: Verify direct Telegram webhook is deliberately disabled
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/webhook.json --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"update_id":1,"message":{"chat":{"id":1},"text":"/revenue"}}' \
+            "$BASE/api/monetization/telegram/webhook")
+          cat /tmp/webhook.json
+          test "$code" = '410'
+          grep -q 'OpenClaw' /tmp/webhook.json
+      - name: Verify OpenClaw Telegram manifest is fail-closed without OpenClaw bearer
+        shell: bash
+        run: |
+          BASE='https://umkm-monetization-engine.ruang-belajar-mandiri01.workers.dev'
+          code=$(curl --silent --show-error --output /tmp/manifest.json --write-out '%{http_code}' \
+            "$BASE/api/monetization/openclaw/telegram-manifest")
+          cat /tmp/manifest.json
+          test "$code" = '401'
