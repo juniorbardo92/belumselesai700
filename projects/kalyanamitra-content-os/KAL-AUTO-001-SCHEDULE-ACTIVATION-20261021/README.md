@@ -1,6 +1,6 @@
 # KAL-AUTO-001 — Aktivasi penjadwalan Threads melalui publisher VPS2
 
-Versi: 2026-10-21. Menggunakan publisher B3e yang fingerprint dan hash-nya sudah terverifikasi di VPS2. **Paket dibuat/diuji di lingkungan lokal, BELUM diinstal di VPS2/VPS4.**
+Versi: 2026-10-21. Menggunakan publisher B3e yang fingerprint dan hash-nya sudah terverifikasi di VPS2. **Status 26 Oktober 2026: sudah terpasang di VPS2 dan VPS4** (receiver V3→V4, worker V3, sender/notify/intake, signed bridge, timer aktif). Kalimat "BELUM diinstal" di bawah adalah konteks historis paket saat dibuat.
 
 ## Sudah dimiliki dan tidak diubah
 

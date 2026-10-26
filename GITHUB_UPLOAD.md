@@ -1,5 +1,7 @@
 # Melanjutkan unggahan ke GitHub
 
+> **Pembaruan 26 Oktober 2026:** berkas ekspor sudah terunggah (commit `2018f3d`, 1.216 berkas). Dokumen di bawah adalah catatan historis proses ekspor 24 Oktober.
+
 Target: https://github.com/juniorbardo92/belumselesai700
 
 Pada 24 Oktober 2026, repository dapat dibaca dan masih kosong, tetapi operasi pembuatan berkas melalui koneksi GitHub ditolak dengan `403: Resource not accessible by integration`. Belum ada commit yang berhasil dikirim oleh pekerjaan ekspor ini.

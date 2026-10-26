@@ -1,6 +1,6 @@
 # KAL-AUTO-001 V4 — Four-in-One Publication Proof & Telegram Report
 
-**21 Oktober 2026 — Kandidat implementasi, BELUM deployed dari ChatGPT.**
+**21 Oktober 2026 — Kandidat implementasi. Status 26 Oktober 2026: sudah terpasang dan berjalan di VPS2/VPS4; "BELUM deployed" adalah konteks historis paket.**
 
 Paket ini menggabungkan **empat pekerjaan** dalam satu jalur: (1) pemeriksaan keterlihatan publik, (2) metadata root–balasan, (3) rekonsiliasi publikasi sesudah jadwal selesai, dan (4) notifikasi otomatis Telegram. Ini merupakan **monitor tambahan**, bukan perubahan publisher atau scheduler yang sudah lulus UAT.
 

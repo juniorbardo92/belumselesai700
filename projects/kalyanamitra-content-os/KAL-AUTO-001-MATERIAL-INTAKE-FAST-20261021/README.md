@@ -1,6 +1,6 @@
 # KAL-AUTO-001 — Material Intake FAST V1
 
-Perubahan minimum untuk bot Kalyanamitra pada **VPS4 saja**. Tidak mengubah OpenClaw gateway, agent binding, config global, Repliz, publisher VPS2 atau SSH. OpenClaw sudah menerima pesan Telegram, skill ini mengajarkan agen menyimpan materi, mengolah lampiran yang disediakan gateway, dan memberikan receipt.
+Perubahan minimum untuk bot Kalyanamitra pada **VPS4 saja**. Tidak mengubah OpenClaw gateway, agent binding, config global, Repliz, publisher VPS2 atau SSH. OpenClaw sudah menerima pesan Telegram, skill ini mengajarkan agen menyimpan materi, mengolah lampiran yang disediakan gateway, dan memberikan receipt. **Status 26 Oktober 2026: sudah terpasang di VPS4** dan dipakai pada UAT intake (material tersimpan di `inbox/KALMAT-*`).
 
 ## Install
 

@@ -11,8 +11,8 @@
     },
     {
       "path": "BACKLOG.md",
-      "size_bytes": 2348,
-      "sha256": "25dc957e237f8868849f4b2e71e4c4aa268b15be281dde4035e6e50ba1382031",
+      "size_bytes": 3556,
+      "sha256": "babf962cc2ebb333f6c3f035ef2d5a84f91adb11c7befa1d7d348021345c323f",
       "source_archive": "export-documentation-2026-10-24",
       "sanitized": false
     },
@@ -27,8 +27,8 @@
       "path": "GITHUB_UPLOAD.md",
       "source_archive": "export-documentation-2026-10-24",
       "sanitized": false,
-      "size_bytes": 1247,
-      "sha256": "46c7b3e7293e9ae0cab8161dbc8cf013eb87ec8b9644352321a085df08d5d166"
+      "size_bytes": 1412,
+      "sha256": "ca418e2172ce8ccea1bb473191e5fe222bf682a67cf13f24e59fb1a5b4b6c443"
     },
     {
       "path": "README.md",
@@ -2395,8 +2395,8 @@
     },
     {
       "path": "projects/kalyanamitra-content-os/KAL-AUTO-001-FOUR-IN-ONE-20261021/README.md",
-      "size_bytes": 8303,
-      "sha256": "2e26697867bd93eba612d1a39239f4f680d8c57d6a66f187e60e17e8ce7b4d81",
+      "size_bytes": 8389,
+      "sha256": "0829f86038f56e2a478f96806c067ce7f217bf017ae1284c475e72979a151eca",
       "source_archive": "KAL-AUTO-001-FOUR-IN-ONE-20261021.zip",
       "source_path": "KAL-AUTO-001-FOUR-IN-ONE/README.md",
       "sanitized": false
@@ -2491,8 +2491,8 @@
     },
     {
       "path": "projects/kalyanamitra-content-os/KAL-AUTO-001-MATERIAL-INTAKE-FAST-20261021/README.md",
-      "size_bytes": 1725,
-      "sha256": "3c4f3ef6d80b775844bfa1833d7fd82ce283770b58335ec75a4bce59982d0815",
+      "size_bytes": 1847,
+      "sha256": "be7bc53c2c126918ba999d17e6dba49dc4ef87a9f5391d2ad27b6c8b5db5fc82",
       "source_archive": "KAL-AUTO-001-MATERIAL-INTAKE-FAST-20261021.zip",
       "source_path": "kalauto_intake_fast_v1/README.md",
       "sanitized": false
@@ -2739,8 +2739,8 @@
     },
     {
       "path": "projects/kalyanamitra-content-os/KAL-AUTO-001-SCHEDULE-ACTIVATION-20261021/README.md",
-      "size_bytes": 6689,
-      "sha256": "235dbf68d98d8cd3c036563620a63b2aebf67df56e07bccecee9222f67a63b43",
+      "size_bytes": 6835,
+      "sha256": "e5ad9f6413f9a151e49b1aef015aa09c98d46e41720b9fabc1b2545334a2bf94",
       "source_archive": "KAL-AUTO-001-SCHEDULE-ACTIVATION-20261021.zip",
       "source_path": "KAL-AUTO-001-SCHEDULE-ACTIVATION/README.md",
       "sanitized": false
@@ -2883,8 +2883,8 @@
     },
     {
       "path": "projects/kalyanamitra-content-os/README.md",
-      "size_bytes": 1011,
-      "sha256": "da7226f2d668c96d6d5af07b1a182d6bdc4860ef1923555b4393de9b55002754",
+      "size_bytes": 1250,
+      "sha256": "35bdee7cfcd13159a1c0713ddd6ceaa0fed6010931673776d15f6c1c8efb2eb6",
       "source_archive": "export-documentation-2026-10-24",
       "sanitized": false
     },
@@ -9706,5 +9706,18 @@
       "source_archive": "export-documentation-2026-10-24",
       "sanitized": false
     }
-  ]
+  ],
+  "reconciliation": {
+    "date": "2026-10-26",
+    "files_changed": 6,
+    "reason": "rekonsiliasi status Kalyanamitra pasca-audit live VPS2/VPS4 (dokumen saja, tanpa perubahan kode)",
+    "paths": [
+      "BACKLOG.md",
+      "GITHUB_UPLOAD.md",
+      "projects/kalyanamitra-content-os/README.md",
+      "projects/kalyanamitra-content-os/KAL-AUTO-001-SCHEDULE-ACTIVATION-20261021/README.md",
+      "projects/kalyanamitra-content-os/KAL-AUTO-001-FOUR-IN-ONE-20261021/README.md",
+      "projects/kalyanamitra-content-os/KAL-AUTO-001-MATERIAL-INTAKE-FAST-20261021/README.md"
+    ]
+  }
 }

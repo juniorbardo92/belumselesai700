@@ -8,7 +8,15 @@ Source /opt/umkm-engine terbaru, state antrean, serta rekonsiliasi Threads dan I
 
 ## Kalyanamitra Content OS / KAL-AUTO
 
-Catatan operasional 22 Oktober: worker aktif, 29 scheduled, 21 ready, 1 draft. Ini bukan pembacaan ulang server pada tanggal ekspor. Cocokkan konfigurasi, antrean, dan hasil publikasi di VPS.
+Terrekonsiliasi 26 Oktober 2026 melalui pembacaan langsung VPS2 (`VM-0-10-ubuntu`) dan VPS4 (`VM-4-5-ubuntu`), read-only:
+
+- Kandidat sudah terpasang dan berjalan: receiver V4, kalauto/worker V3, monitor hotfix (VPS2); sender V3 + notify V4 + intake + kedua skill + signed bridge (VPS4).
+- Timer `kalauto-schedule-worker.timer` dan `kalauto-publication-monitor.timer` aktif.
+- Antrean saat pembacaan: 50 `SCHEDULED` + 1 `DRAFT` (2 job diproses 21 Okt, 48 pada 22 Okt). Catatan lama "29 scheduled / 21 ready / 1 draft" sudah kedaluwarsa: 21 job READY telah menjadi SCHEDULED.
+- Bukti publikasi: 12 baris proof, 13 alert; beberapa job `CONTENT_CONFIRMED` dengan 7 URL post Threads dan alert Telegram berstatus `SENT`.
+- Pembatalan/ubah jadwal/hentikan otomasi belum punya jalur agen (tool hanya `bootstrap`/`submit`/`status`); dilakukan manual di dashboard Repliz atau oleh operator.
+- `parent_child` tetap `NOT_VERIFIED`: Repliz Content API tidak mengembalikan field induk (terbukti dari probe field: hanya `createdAt, description, id, medias, owner, title, type, url`). Pemilik memakai Repliz, bukan Meta; status ini batasan permanen, bukan pekerjaan tertunda.
+- UAT alur intent pemilik (26 Okt): intake, draft, tolak materi tanpa sumber, tolak target non-Threads, dan cek status = PASS; uji penjadwalan nyata (UAT-5) deferred sampai materi 6–8 bagian dengan sumber terverifikasi siap dijadwalkan.
 
 ## UMKM Monetization Engine
 
